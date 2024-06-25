@@ -1,0 +1,25 @@
+---
+- name: Gather system information
+  hosts: all
+  gather_facts: yes
+  tasks:
+
+    - name: Get IP address
+      ansible.builtin.set_fact:
+        ip_address: "{{ ansible_default_ipv4.address }}"
+
+    - name: Get OS version
+      ansible.builtin.set_fact:
+        os_version: "{{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+    - name: Print collected information
+      ansible.builtin.debug:
+        msg: "IP Address: {{ ip_address }}, OS Version: {{ os_version }}"
+
+    - name: Save information to a file
+      ansible.builtin.copy:
+        content: |
+          IP Address: {{ ip_address }}
+          OS Version: {{ os_version }}
+        dest: "/tmp/system_info_{{ ansible_hostname }}.txt"
+
