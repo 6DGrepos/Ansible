@@ -3,7 +3,7 @@
   become: yes
   vars:
     # Ensure that the default answer is chosen automatically during the package installation
-    apt_options: '-y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
+    apt_options: ['-y', '-o', 'Dpkg::Options::="--force-confdef"', '-o', 'Dpkg::Options::="--force-confold"']
 
   tasks:
     - name: Remove unused packages and dependencies
