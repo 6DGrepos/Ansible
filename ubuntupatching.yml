@@ -1,36 +1,25 @@
 ---
-- hosts: all
+- name: Patch Ubuntu Server
+  hosts: all
   become: yes
-  vars:
-    apt_options: ['-y', '-o', 'Dpkg::Options::="--force-confdef"', '-o', 'Dpkg::Options::="--force-confold"']
-
   tasks:
-    - name: Remove unused packages and dependencies
-      ansible.builtin.apt:
-        autoremove: yes
-        dpkg_options: "{{ apt_options }}"
-      tags: autoremove
-
-    - name: Clean the local repository of retrieved package files
-      ansible.builtin.apt:
-        autoclean: yes
-        dpkg_options: "{{ apt_options }}"
-      tags: autoclean
-
-    - name: Update the apt package index
-      ansible.builtin.apt:
+    - name: Ensure apt is updated
+      apt:
         update_cache: yes
-      tags: update
 
-    - name: Upgrade all packages to the latest version
-      ansible.builtin.apt:
+    - name: Perform apt autoremove
+      apt:
+        autoremove: yes
+
+    - name: Perform apt autoclean
+      apt:
+        autoclean: yes
+
+    - name: Upgrade all packages
+      apt:
         upgrade: dist
-        dpkg_options: "{{ apt_options }}"
-      tags: upgrade
 
-    - name: Reboot the server if the kernel was updated
-      ansible.builtin.reboot:
-        msg: "Reboot initiated by Ansible for kernel updates."
-        reboot_timeout: 600
-      when: "'linux-image' in ansible_facts.packages"
-      tags: reboot
+    - name: Reboot if required
+      reboot:
+        msg: "Rebooting after updates"
+        when: ansible_facts['pkg_mgr'] == 'apt' and (ansible_facts['os_family'] == 'Debian')
