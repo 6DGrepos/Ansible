@@ -6,17 +6,6 @@
     apt_options: '-y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
 
   tasks:
-    - name: Update the apt package index
-      ansible.builtin.apt:
-        update_cache: yes
-      tags: update
-
-    - name: Upgrade all packages to the latest version
-      ansible.builtin.apt:
-        upgrade: dist
-        dpkg_options: "{{ apt_options }}"
-      tags: upgrade
-
     - name: Remove unused packages and dependencies
       ansible.builtin.apt:
         autoremove: yes
@@ -28,6 +17,17 @@
         autoclean: yes
         dpkg_options: "{{ apt_options }}"
       tags: autoclean
+
+    - name: Update the apt package index
+      ansible.builtin.apt:
+        update_cache: yes
+      tags: update
+
+    - name: Upgrade all packages to the latest version
+      ansible.builtin.apt:
+        upgrade: dist
+        dpkg_options: "{{ apt_options }}"
+      tags: upgrade
 
     - name: Reboot the server if the kernel was updated
       ansible.builtin.reboot:
