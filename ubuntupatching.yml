@@ -22,4 +22,4 @@
     - name: Reboot if required
       reboot:
         msg: "Rebooting after updates"
-        when: ansible_facts['pkg_mgr'] == 'apt' and (ansible_facts['os_family'] == 'Debian')
+      when: ansible_facts['pkg_mgr'] == 'apt' and (ansible_facts['os_family'] == 'Debian')
