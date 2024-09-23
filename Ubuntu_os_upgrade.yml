@@ -1,6 +1,6 @@
 ---
 - name: Upgrade Ubuntu to the next available version
-  hosts: your_target_hosts
+  hosts: all
   become: yes
   tasks:
     - name: Update APT repository
