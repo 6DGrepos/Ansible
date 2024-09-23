@@ -1,0 +1,53 @@
+---
+- name: Upgrade Ubuntu to the next available version
+  hosts: all
+  become: true
+  tasks:
+    - name: Check current Ubuntu version
+      command: lsb_release -rs
+      register: ubuntu_version
+
+    - name: Ensure supported Ubuntu version
+      fail:
+        msg: "This playbook only supports Ubuntu 16.04, 18.04, 20.04, 22.04, or 24.04."
+      when: ubuntu_version.stdout not in ["16.04", "18.04", "20.04", "22.04", "24.04"]
+
+    - name: Update package list
+      apt:
+        update_cache: yes
+
+    - name: Upgrade all packages to latest
+      apt:
+        upgrade: dist
+
+    - name: Install update-manager-core
+      apt:
+        name: update-manager-core
+        state: present
+
+    - name: Set the prompt for the upgrade
+      lineinfile:
+        path: /etc/update-manager/release-upgrades
+        regexp: '^Prompt='
+        line: 'Prompt=lts'
+
+    - name: Upgrade to the next available LTS version
+      command: do-release-upgrade -f DistUpgradeViewNonInteractive
+      register: upgrade_output
+      async: 600
+      poll: 0
+
+    - name: Wait for upgrade to complete
+      async_status:
+        jid: "{{ upgrade_output.ansible_job_id }}"
+      register: job_result
+      until: job_result.finished
+      retries: 60
+      delay: 10
+
+    - name: Reboot the server if necessary
+      reboot:
+        msg: "Rebooting after upgrade"
+        connect_timeout: 5
+        timeout: 600
+      when: job_result.rc == 0
