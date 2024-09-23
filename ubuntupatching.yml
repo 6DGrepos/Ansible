@@ -1,0 +1,32 @@
+---
+- hosts: all
+  become: yes
+  vars:
+    # Ensure that the default answer is chosen automatically during the package installation
+    apt_options: '-y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
+
+  tasks:
+    - name: Update the apt package index
+      ansible.builtin.apt:
+        update_cache: yes
+      tags: update
+
+    - name: Upgrade all packages to the latest version
+      ansible.builtin.apt:
+        upgrade: dist
+        # Use the apt_options variable to ensure that any prompts are automatically answered with the default option
+        dpkg_options: "{{ apt_options }}"
+      tags: upgrade
+
+    - name: Remove unused packages and dependencies
+      ansible.builtin.apt:
+        autoremove: yes
+        dpkg_options: "{{ apt_options }}"
+      tags: autoremove
+
+    - name: Reboot the server if the kernel was updated
+      ansible.builtin.reboot:
+        msg: "Reboot initiated by Ansible for kernel updates."
+        reboot_timeout: 600
+      when: "'linux-image' in ansible_facts.packages"
+      tags: reboot
