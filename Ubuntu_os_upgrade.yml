@@ -3,13 +3,25 @@
   hosts: all
   become: yes
   tasks:
+    - name: Fix broken dependencies
+      command: apt --fix-broken install -y
+      ignore_errors: yes
+
     - name: Update APT repository
       apt:
         update_cache: yes
+      register: update_cache_result
+      retries: 5
+      delay: 10
+      until: update_cache_result is succeeded
 
     - name: Upgrade to the latest packages
       apt:
         upgrade: dist
+      register: upgrade_result
+      retries: 5
+      delay: 10
+      until: upgrade_result is succeeded
 
     - name: Install update-manager-core if not already installed
       apt:
