@@ -14,7 +14,6 @@
     - name: Upgrade all packages to the latest version
       ansible.builtin.apt:
         upgrade: dist
-        # Use the apt_options variable to ensure that any prompts are automatically answered with the default option
         dpkg_options: "{{ apt_options }}"
       tags: upgrade
 
@@ -23,6 +22,12 @@
         autoremove: yes
         dpkg_options: "{{ apt_options }}"
       tags: autoremove
+
+    - name: Clean the local repository of retrieved package files
+      ansible.builtin.apt:
+        autoclean: yes
+        dpkg_options: "{{ apt_options }}"
+      tags: autoclean
 
     - name: Reboot the server if the kernel was updated
       ansible.builtin.reboot:
