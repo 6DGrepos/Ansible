@@ -4,18 +4,14 @@
   become: yes
   tasks:
     - name: Fix broken dependencies
-      apt:
-        name: ''
-        state: latest
-        update_cache: yes
-        force: yes
-      register: fix_broken_result
+      command: dpkg --configure -a
+      register: dpkg_result
       ignore_errors: yes
 
-    - name: Check if there were broken dependencies
+    - name: Check if dpkg was configured successfully
       fail:
-        msg: "Fixing broken dependencies failed. Manual intervention is required."
-      when: fix_broken_result is failed
+        msg: "dpkg configuration failed. Manual intervention required."
+      when: dpkg_result.rc != 0
 
     - name: Update APT repository
       apt:
