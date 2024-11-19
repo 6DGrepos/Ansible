@@ -82,27 +82,24 @@
     state: directory
     mode: '0755'
 
+---
 - name: Ensure log file is accessible and copy to backup server
   hosts: all
+  become: yes  # Ensure the tasks are run as root
   tasks:
     - name: Ensure the directory has correct permissions
       file:
         path: "/tmp/command_outputs"
         mode: '0755'
         state: directory
-      become: yes
 
     - name: Ensure the log file has correct permissions
       file:
         path: "/tmp/command_outputs/{{ inventory_hostname }}_info_{{ ansible_date_time.date }}.log"
         mode: '0644'
         state: file
-      become: yes
 
-    - name: Copy the output file to backup server
+    - name: Copy the output file to the backup server
       copy:
-        src: "{{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
-        dest: "{{ backup_path }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
-        mode: '0644'
-        remote_src: yes
-      delegate_to: "{{ backup_server }}"
+        src: "/tmp/command_outputs/{{ inventory_hostname }}_info_{{ ansible_date_time.date }}.log"
+        dest: "/home/svc_aux/backup/{{ inventory_hostname }}_info_{{ ansible_date_time.date }}.log"
