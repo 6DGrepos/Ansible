@@ -3,7 +3,9 @@
   hosts: all
   tasks:
     - name: Create output file
-      shell: touch /tmp/{{ inventory_hostname }}_{{ ansible_date_time.date }}.out
+      ansible.builtin.file:
+        path: /tmp/{{ inventory_hostname }}_{{ ansible_date_time.date }}.out
+        state: touch
 
     - name: Execute commands and append output to file
       shell: |
