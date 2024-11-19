@@ -1,116 +1,118 @@
+Sure, I can help with that! Here's the modified Ansible playbook that includes a task to transfer the output file to the server `10.1.128.84` in the directory `/home/svc_aux/backup`. It will create the directory if it doesn't exist.
+
+```yaml
 ---
-- name: Collect command outputs and backup to remote server
+- name: Execute commands and store output
   hosts: all
-  become: yes
-  vars:
-    output_dir: "/tmp/command_outputs"
-    backup_server: "10.1.128.84"
-    backup_path: "/home/svc_aux/backup"
-    current_date: "{{ ansible_date_time.date }}"
-
   tasks:
-    - name: Create directory to store outputs on the target server
-      file:
-        path: "{{ output_dir }}"
-        state: directory
-        mode: '0755'
+    - name: Create output file
+      shell: touch /tmp/{{ inventory_hostname }}_{{ ansible_date_time.date }}.out
 
-    - name: Execute commands and save output to a log file
+    - name: Execute commands and append output to file
       shell: |
-        echo "==== Command Output for {{ inventory_hostname }} on {{ current_date }} ====" > {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
-        echo "==== Process Checks ====" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
-        ps aux | grep -E 'httpd|nginx|apache2' || echo "httpd/nginx/apache2 not found" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
-        ps aux | grep -E 'mysql|mariadb' || echo "Command not available: ps aux for mysql/mariadb" >> {{ output_file }}
-        ps aux | grep postgres || echo "PostgreSQL not found" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
-        ps aux | grep pmon || echo "Command not available: ps aux for pmon" >> {{ output_file }}
-        ps aux | grep mongo || echo "Command not available: ps aux for mongo" >> {{ output_file }}
-        ps aux | grep -E 'mysql|mariadb|postgres|oracle|mongo|mssql' || echo "Command not available: ps aux for database services" >> {{ output_file }}
-        ps aux || echo "Command not available: ps aux" >> {{ output_file }}
-        ps -ef || echo "Command not available: ps -ef" >> {{ output_file }}
-        echo "==== Web Server Configurations ====" >> {{ output_file }}
-        nginx -T 2>/dev/null || echo "Command not available: nginx -T" >> {{ output_file }}
-        apache2 -S 2>/dev/null || echo "Command not available: apache2 -S" >> {{ output_file }}
-        apache2ctl -S 2>/dev/null || echo "Command not available: apache2ctl -S" >> {{ output_file }}
-        httpd -S 2>/dev/null || echo "Command not available: httpd -S" >> {{ output_file }}
+        {
+          echo "==== Process Information ====";
+          ps aux | grep -E 'httpd|nginx|apache2' || echo "command not available";
+          ps aux | grep -E 'mysql|mariadb' || echo "command not available";
+          ps aux | grep postgres || echo "command not available";
+          ps aux | grep pmon || echo "command not available";
+          ps aux | grep mongo || echo "command not available";
+          ps aux | grep -E 'mysql|mariadb|postgres|oracle|mongo|mssql' || echo "command not available";
+          ps aux || echo "command not available";
+          ps -ef || echo "command not available";
 
-        echo "==== Open Ports and Connections ====" >> {{ output_file }}
-        netstat -plant || echo "Command not available: netstat -plant" >> {{ output_file }}
-        netstat -tulpn || echo "Command not available: netstat -tulpn" >> {{ output_file }}
-        netstat -tulnp | grep -E '80|443' || echo "Command not available: netstat for ports 80/443" >> {{ output_file }}
-        ss || echo "Command not available: ss" >> {{ output_file }}
-        netstat -plant | grep -i listen || echo "Command not available: netstat for listen" >> {{ output_file }}
+          echo "==== Web Server Configurations ====";
+          nginx -T 2>/dev/null || echo "command not available";
+          apache2 -S 2>/dev/null || echo "command not available";
+          apache2ctl -S 2>/dev/null || echo "command not available";
+          httpd -S 2>/dev/null || echo "command not available";
 
-        echo "==== System Services Status ====" >> {{ output_file }}
-        systemctl status mysql || echo "Service not available: mysql" >> {{ output_file }}
-        systemctl status mariadb || echo "Service not available: mariadb" >> {{ output_file }}
-        systemctl status postgresql || echo "Service not available: postgresql" >> {{ output_file }}
-        lsnrctl status || echo "Service not available: lsnrctl" >> {{ output_file }}
-        systemctl status mongod || echo "Service not available: mongod" >> {{ output_file }}
-        systemctl status mssql-server || echo "Service not available: mssql-server" >> {{ output_file }}
-        systemctl status apache2.service || echo "Service not available: apache2" >> {{ output_file }}
-        systemctl status php-fpm || echo "Service not available: php-fpm" >> {{ output_file }}
-        systemctl list-units --state=running || echo "Command not available: systemctl list-units" >> {{ output_file }}
-        systemctl list-unit-files || echo "Command not available: systemctl list-unit-files" >> {{ output_file }}
+          echo "==== Open Ports and Connections ====";
+          netstat -plant || echo "command not available";
+          netstat -tulpn || echo "command not available";
+          netstat -tulnp | grep -E '80|443' || echo "command not available";
+          ss || echo "command not available";
+          netstat -plant | grep -i listen || echo "command not available";
 
-        echo "==== Web Server Configurations ====" >> {{ output_file }}
-        grep -R "ServerName" /etc/httpd/ || echo "Command not available: grep ServerName in /etc/httpd/" >> {{ output_file }}
-        grep -R "ServerName" /etc/apache2/ || echo "Command not available: grep ServerName in /etc/apache2/" >> {{ output_file }}
-        grep -R "server_name" /etc/nginx/ || echo "Command not available: grep server_name in /etc/nginx/" >> {{ output_file }}
-        grep DocumentRoot /etc/httpd/conf/httpd.conf || echo "Command not available: grep DocumentRoot in /etc/httpd/" >> {{ output_file }}
-        grep DocumentRoot /etc/apache2/sites-available/*.conf || echo "Command not available: grep DocumentRoot in /etc/apache2/sites-available/" >> {{ output_file }}
-        grep root /etc/nginx/sites-available/*.conf || echo "Command not available: grep root in /etc/nginx/sites-available/" >> {{ output_file }}
-        grep -Ri "DocumentRoot" /etc/apache2/ || echo "Command not available: grep DocumentRoot recursively in /etc/apache2/" >> {{ output_file }}
-        grep -Ri "server_name" /etc/nginx/ || echo "Command not available: grep server_name recursively in /etc/nginx/" >> {{ output_file }}
-        grep -Ri "fastcgi_pass" /etc/nginx/ || echo "Command not available: grep fastcgi_pass recursively in /etc/nginx/" >> {{ output_file }}
+          echo "==== System Services Status ====";
+          systemctl status mysql || echo "command not available";
+          systemctl status mariadb || echo "command not available";
+          systemctl status postgresql || echo "command not available";
+          lsnrctl status || echo "command not available";
+          systemctl status mongod || echo "command not available";
+          systemctl status mssql-server || echo "command not available";
+          systemctl status apache2.service || echo "command not available";
+          systemctl status php-fpm || echo "command not available";
+          systemctl list-units --state=running || echo "command not available";
+          systemctl list-unit-files || echo "command not available";
 
-        echo "==== PHP Information ====" >> {{ output_file }}
-        php -v || echo "Command not available: php -v" >> {{ output_file }}
-        php -m || echo "Command not available: php -m" >> {{ output_file }}
-        apachectl -M | grep php || echo "Command not available: apachectl for php" >> {{ output_file }}
+          echo "==== Web Server Configurations ====";
+          grep -R "ServerName" /etc/httpd/ || echo "command not available";
+          grep -R "ServerName" /etc/apache2/ || echo "command not available";
+          grep -R "server_name" /etc/nginx/ || echo "command not available";
+          grep DocumentRoot /etc/httpd/conf/httpd.conf || echo "command not available";
+          grep DocumentRoot /etc/apache2/sites-available/*.conf || echo "command not available";
+          grep root /etc/nginx/sites-available/*.conf || echo "command not available";
+          grep -Ri "DocumentRoot" /etc/apache2/ || echo "command not available";
+          grep -Ri "server_name" /etc/nginx/ || echo "command not available";
+          grep -Ri "fastcgi_pass" /etc/nginx/ || echo "command not available";
 
-        echo "==== Docker Information ====" >> {{ output_file }}
-        docker ps || echo "Command not available: docker ps" >> {{ output_file }}
-        docker ps -a || echo "Command not available: docker ps -a" >> {{ output_file }}
-        docker images -a || echo "Command not available: docker images -a" >> {{ output_file }}
-        docker images || echo "Command not available: docker images" >> {{ output_file }}
+          echo "==== PHP Information ====";
+          php -v || echo "command not available";
+          php -m || echo "command not available";
+          apachectl -M | grep php || echo "command not available";
 
-        echo "==== System Information ====" >> {{ output_file }}
-        uname -a || echo "Command not available: uname -a" >> {{ output_file }}
-        ifconfig -a || echo "Command not available: ifconfig -a" >> {{ output_file }}
-        ip a || echo "Command not available: ip a" >> {{ output_file }}
-        ip route show || echo "Command not available: ip route show" >> {{ output_file }}
-        netstat -nr || echo "Command not available: netstat -nr" >> {{ output_file }}
-        fdisk -l || echo "Command not available: fdisk -l" >> {{ output_file }}
-        rpm -qa --last || echo "Command not available: rpm -qa" >> {{ output_file }}
-        vgdisplay || echo "Command not available: vgdisplay" >> {{ output_file }}
-        lvdisplay || echo "Command not available: lvdisplay" >> {{ output_file }}
-        pvs || echo "Command not available: pvs" >> {{ output_file }}
-        vgs || echo "Command not available: vgs" >> {{ output_file }}
-        lsblk -d || echo "Command not available: lsblk -d" >> {{ output_file }}
-        lsblk || echo "Command not available: lsblk" >> {{ output_file }}
-        blkid || echo "Command not available: blkid" >> {{ output_file }}
-        lsscsi || echo "Command not available: lsscsi" >> {{ output_file }}
-        cat /etc/fstab || echo "Command not available: cat /etc/fstab" >> {{ output_file }}
-        cat /etc/resolv.conf || echo "Command not available: cat /etc/resolv.conf" >> {{ output_file }}
-        mount || echo "Command not available: mount" >> {{ output_file }}
-        cat /etc/*release || echo "Command not available: cat /etc/*release" >> {{ output_file }}
-        cat /etc/hosts || echo "Command not available: cat /etc/hosts" >> {{ output_file }}
-        ls -l /dev/mapper || echo "Command not available: ls -l /dev/mapper" >> {{ output_file }}
-        cat /boot/grub/menu.lst || echo "Command not available: cat /boot/grub/menu.lst" >> {{ output_file }}
-        cat /boot/grub2/grub.cfg | grep -v ^# || echo "Command not available: cat /boot/grub2/grub.cfg" >> {{ output_file }}
-        cat /boot/grub2/grub.cfg || echo "Command not available: cat /boot/grub2/grub.cfg" >> {{ output_file }}
-        lvs || echo "Command not available: lvs" >> {{ output_file }}
-        lvs -a -o+devices || echo "Command not available: lvs -a -o+devices" >> {{ output_file }
+          echo "==== Docker Information ====";
+          docker ps || echo "command not available";
+          docker ps -a || echo "command not available";
+          docker images -a || echo "command not available";
+          docker images || echo "command not available";
 
-    - name: Fetch the output file to Ansible Controller
-      fetch:
-        src: "{{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
-        dest: "/tmp/command_outputs/"
-        flat: yes
+          echo "==== System Information ====";
+          uname -a || echo "command not available";
+          ifconfig -a || echo "command not available";
+          ip a || echo "command not available";
+          ip route show || echo "command not available";
+          netstat -nr || echo "command not available";
+          fdisk -l || echo "command not available";
+          rpm -qa --last || echo "command not available";
+          vgdisplay || echo "command not available";
+          lvdisplay || echo "command not available";
+          pvs || echo "command not available";
+          vgs || echo "command not available";
+          lsblk -d || echo "command not available";
+          lsblk || echo "command not available";
+          blkid || echo "command not available";
+          lsscsi || echo "command not available";
+          cat /etc/fstab || echo "command not available";
+          cat /etc/resolv.conf || echo "command not available";
+          mount || echo "command not available";
+          cat /etc/*release || echo "command not available";
+          cat /etc/hosts || echo "command not available";
+          ls -l /dev/mapper || echo "command not available";
+          cat /boot/grub/menu.lst || echo "command not available";
+          cat /boot/grub2/grub.cfg | grep -v ^# || echo "command not available";
+          cat /boot/grub2/grub.cfg || echo "command not available";
+          lvs -a -o +devices -P || echo "command not available";
+          lvs --segments || echo "command not available";
+          lvs -o+lv_layout,stripes || echo "command not available";
+          lvs -a -o+lv_layout,lv_role,stripes,devices || echo "command not available";
+          free -g || echo "command not available";
+          lscpu || echo "command not available";
+          df -h || echo "command not available";
+          cat /etc/passwd || echo "command not available";
+          cat /etc/shadow || echo "command not available";
+          cat /etc/group || echo "command not available";
+          ls -l /boot/ || echo "command not available";
+        } >> /tmp/{{ inventory_hostname }}_{{ ansible_date_time.date }}.out 2>&1
+      ignore_errors: yes
 
-    - name: Copy the output file to backup server
-      copy:
-        src: "/tmp/command_outputs/{{ inventory_hostname }}_info_{{ current_date }}.log"
-        dest: "{{ backup_path }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
-        mode: '0644'
-      delegate_to: "{{ backup_server }}"
+    - name: Ensure destination directory exists on remote server
+      ansible.builtin.shell: mkdir -p /home/svc_aux/backup
+      delegate_to: 10.1.128.84
+
+    - name: Copy output file to remote server
+      ansible.builtin.copy:
+        src: /tmp/{{ inventory_hostname }}_{{ ansible_date_time.date }}.out
+        dest: /home/svc_aux/backup/
+      delegate_to: 10.1.128.84
