@@ -87,4 +87,5 @@
         src: "{{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
         dest: "{{ backup_path }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
         mode: '0644'
+        remote_src: yes
       delegate_to: "{{ backup_server }}"
