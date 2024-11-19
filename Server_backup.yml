@@ -2,7 +2,7 @@
 - name: Collect system information and send to remote server
   hosts: localhost
   become: yes
-  gather_facts: no
+  gather_facts: yes  # Set to 'yes' so ansible_date_time is gathered
   vars:
     output_file: "/tmp/system_info_{{ inventory_hostname }}_{{ ansible_date_time.iso8601_basic }}.log"
   tasks:
