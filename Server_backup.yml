@@ -1,39 +1,35 @@
 ---
-- name: Collect system information and send to remote server
+- name: Collect command outputs and backup to remote server
   hosts: all
-  gather_facts: true
-  become: true
-
+  become: yes
   vars:
-    remote_server: "10.1.128.84"
-    backup_user: "svc_aux"
-    remote_password: "just44now"
-    remote_path: "/home/svc_aux/backup"
-    output_file: "/tmp/system_info_{{ inventory_hostname }}_{{ ansible_date_time.iso8601_basic }}.log"
+    output_dir: "/tmp/command_outputs"
+    backup_server: "10.1.128.84"
+    backup_path: "/home/svc_aux/backup"
+    current_date: "{{ ansible_date_time.date }}"
 
   tasks:
-    - name: Generate system information output file on the remote server
-      shell: |
-        echo "==== Process Information ====" > {{ output_file }}
-        ps aux | grep -E 'httpd|nginx|apache2' || echo "Command not available: ps aux for web servers" >> {{ output_file }}
-        ps aux | grep -E 'mysql|mariadb' || echo "Command not available: ps aux for mysql/mariadb" >> {{ output_file }}
-        ps aux | grep postgres || echo "Command not available: ps aux for postgres" >> {{ output_file }}
-        ps aux | grep pmon || echo "Command not available: ps aux for pmon" >> {{ output_file }}
-        ps aux | grep mongo || echo "Command not available: ps aux for mongo" >> {{ output_file }}
-        ps aux | grep -E 'mysql|mariadb|postgres|oracle|mongo|mssql' || echo "Command not available: ps aux for database services" >> {{ output_file }}
-        ps aux || echo "Command not available: ps aux" >> {{ output_file }}
-        ps -ef || echo "Command not available: ps -ef" >> {{ output_file }}
-        echo "==== Web Server Configurations ====" >> {{ output_file }}
-        nginx -T 2>/dev/null || echo "Command not available: nginx -T" >> {{ output_file }}
-        apache2 -S 2>/dev/null || echo "Command not available: apache2 -S" >> {{ output_file }}
-        apache2ctl -S 2>/dev/null || echo "Command not available: apache2ctl -S" >> {{ output_file }}
-        httpd -S 2>/dev/null || echo "Command not available: httpd -S" >> {{ output_file }}
+    - name: Create directory to store outputs on the target server
+      file:
+        path: "{{ output_dir }}"
+        state: directory
+        mode: '0755'
 
-        echo "==== Open Ports and Connections ====" >> {{ output_file }}
-        netstat -plant || echo "Command not available: netstat -plant" >> {{ output_file }}
-        netstat -tulpn || echo "Command not available: netstat -tulpn" >> {{ output_file }}
-        netstat -tulnp | grep -E '80|443' || echo "Command not available: netstat for ports 80/443" >> {{ output_file }}
-        ss || echo "Command not available: ss" >> {{ output_file }}
+    - name: Execute commands and save output to a log file
+      shell: |
+        echo "==== Command Output for {{ inventory_hostname }} on {{ current_date }} ====" > {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
+        echo "==== Process Checks ====" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
+        ps aux | grep -E 'httpd|nginx|apache2' || echo "httpd/nginx/apache2 not found" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
+        ps aux | grep postgres || echo "PostgreSQL not found" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
+
+        echo "==== Service Status ====" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
+        systemctl status apache2.service || echo "Apache2 service not found" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
+        systemctl status nginx || echo "Nginx service not found" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
+        systemctl status mysql || echo "MySQL service not found" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
+
+        echo "==== Open Ports ====" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
+        netstat -plant || echo "netstat command not available" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
+        ss -tuln || echo "ss command not available" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
         netstat -plant | grep -i listen || echo "Command not available: netstat for listen" >> {{ output_file }}
 
         echo "==== System Services Status ====" >> {{ output_file }}
@@ -97,17 +93,22 @@
         cat /boot/grub2/grub.cfg || echo "Command not available: cat /boot/grub2/grub.cfg" >> {{ output_file }}
         lvs || echo "Command not available: lvs" >> {{ output_file }}
         lvs -a -o+devices || echo "Command not available: lvs -a -o+devices" >> {{ output_file }}
-      args:
-        warn: false
+      ignore_errors: true
 
-    - name: Fetch the system information file to Ansible Controller
-      fetch:
-        src: "{{ output_file }}"
-        dest: "./logs/{{ inventory_hostname }}/"
-        flat: yes
+    - name: Ensure backup directory exists on the remote server
+      ansible.builtin.command:
+        cmd: mkdir -p {{ backup_path }}
+      delegate_to: "{{ backup_server }}"
+      become: yes
 
-    - name: Copy logs from Ansible Controller to remote backup server
-      delegate_to: localhost
-      copy:
-        src: "./logs/{{ inventory_hostname }}/system_info_{{ inventory_hostname }}_{{ ansible_date_time.iso8601_basic }}.log"
-        dest: "{{ remote_path }}/system_info_{{ inventory_hostname }}_{{ ansible_date_time.iso8601_basic }}.log"
+    - name: Transfer log files to remote backup server
+      ansible.builtin.copy:
+        src: "{{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
+        dest: "{{ backup_path }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
+      delegate_to: "{{ backup_server }}"
+      become: yes
+
+    - name: Clean up local log files from target servers
+      file:
+        path: "{{ output_dir }}"
+        state: absent
