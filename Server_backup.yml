@@ -11,104 +11,186 @@
       shell: |
         {
           echo "==== Process Information ====";
+          echo "ps aux | grep -E 'httpd|nginx|apache2'";
           ps aux | grep -E 'httpd|nginx|apache2' || echo "command not available";
+          echo "ps aux | grep -E 'mysql|mariadb'";
           ps aux | grep -E 'mysql|mariadb' || echo "command not available";
+          echo "ps aux | grep postgres";
           ps aux | grep postgres || echo "command not available";
+          echo "ps aux | grep pmon";
           ps aux | grep pmon || echo "command not available";
+          echo "ps aux | grep mongo";
           ps aux | grep mongo || echo "command not available";
+          echo "ps aux | grep -E 'mysql|mariadb|postgres|oracle|mongo|mssql'";
           ps aux | grep -E 'mysql|mariadb|postgres|oracle|mongo|mssql' || echo "command not available";
+          echo "ps aux";
           ps aux || echo "command not available";
+          echo "ps -ef";
           ps -ef || echo "command not available";
 
           echo "==== Web Server Configurations ====";
+          echo "nginx -T";
           nginx -T 2>/dev/null || echo "command not available";
+          echo "apache2 -S";
           apache2 -S 2>/dev/null || echo "command not available";
+          echo "apache2ctl -S";
           apache2ctl -S 2>/dev/null || echo "command not available";
+          echo "httpd -S";
           httpd -S 2>/dev/null || echo "command not available";
 
           echo "==== Open Ports and Connections ====";
+          echo "netstat -plant";
           netstat -plant || echo "command not available";
+          echo "netstat -tulpn";
           netstat -tulpn || echo "command not available";
+          echo "netstat -tulnp | grep -E '80|443'";
           netstat -tulnp | grep -E '80|443' || echo "command not available";
+          echo "ss";
           ss || echo "command not available";
+          echo "netstat -plant | grep -i listen";
           netstat -plant | grep -i listen || echo "command not available";
 
           echo "==== System Services Status ====";
+          echo "systemctl status mysql";
           systemctl status mysql || echo "command not available";
+          echo "systemctl status mariadb";
           systemctl status mariadb || echo "command not available";
+          echo "systemctl status postgresql";
           systemctl status postgresql || echo "command not available";
+          echo "lsnrctl status";
           lsnrctl status || echo "command not available";
+          echo "systemctl status mongod";
           systemctl status mongod || echo "command not available";
+          echo "systemctl status mssql-server";
           systemctl status mssql-server || echo "command not available";
+          echo "systemctl status apache2.service";
           systemctl status apache2.service || echo "command not available";
+          echo "systemctl status php-fpm";
           systemctl status php-fpm || echo "command not available";
+          echo "systemctl list-units --state=running";
           systemctl list-units --state=running || echo "command not available";
+          echo "systemctl list-unit-files";
           systemctl list-unit-files || echo "command not available";
 
           echo "==== Web Server Configurations ====";
+          echo "grep -R 'ServerName' /etc/httpd/";
           grep -R "ServerName" /etc/httpd/ || echo "command not available";
+          echo "grep -R 'ServerName' /etc/apache2/";
           grep -R "ServerName" /etc/apache2/ || echo "command not available";
+          echo "grep -R 'server_name' /etc/nginx/";
           grep -R "server_name" /etc/nginx/ || echo "command not available";
+          echo "grep DocumentRoot /etc/httpd/conf/httpd.conf";
           grep DocumentRoot /etc/httpd/conf/httpd.conf || echo "command not available";
+          echo "grep DocumentRoot /etc/apache2/sites-available/*.conf";
           grep DocumentRoot /etc/apache2/sites-available/*.conf || echo "command not available";
+          echo "grep root /etc/nginx/sites-available/*.conf";
           grep root /etc/nginx/sites-available/*.conf || echo "command not available";
+          echo "grep -Ri 'DocumentRoot' /etc/apache2/";
           grep -Ri "DocumentRoot" /etc/apache2/ || echo "command not available";
+          echo "grep -Ri 'server_name' /etc/nginx/";
           grep -Ri "server_name" /etc/nginx/ || echo "command not available";
+          echo "grep -Ri 'fastcgi_pass' /etc/nginx/";
           grep -Ri "fastcgi_pass" /etc/nginx/ || echo "command not available";
 
           echo "==== PHP Information ====";
+          echo "php -v";
           php -v || echo "command not available";
+          echo "php -m";
           php -m || echo "command not available";
+          echo "apachectl -M | grep php";
           apachectl -M | grep php || echo "command not available";
 
           echo "==== Docker Information ====";
+          echo "docker ps";
           docker ps || echo "command not available";
+          echo "docker ps -a";
           docker ps -a || echo "command not available";
+          echo "docker images -a";
           docker images -a || echo "command not available";
+          echo "docker images";
           docker images || echo "command not available";
 
           echo "==== System Information ====";
+          echo "uname -a";
           uname -a || echo "command not available";
+          echo "ifconfig -a";
           ifconfig -a || echo "command not available";
+          echo "ip a";
           ip a || echo "command not available";
+          echo "ip route show";
           ip route show || echo "command not available";
+          echo "netstat -nr";
           netstat -nr || echo "command not available";
+          echo "fdisk -l";
           fdisk -l || echo "command not available";
+          echo "rpm -qa --last";
           rpm -qa --last || echo "command not available";
+          echo "vgdisplay";
           vgdisplay || echo "command not available";
+          echo "lvdisplay";
           lvdisplay || echo "command not available";
+          echo "pvs";
           pvs || echo "command not available";
+          echo "vgs";
           vgs || echo "command not available";
+          echo "lsblk -d";
           lsblk -d || echo "command not available";
+          echo "lsblk";
           lsblk || echo "command not available";
+          echo "blkid";
           blkid || echo "command not available";
+          echo "lsscsi";
           lsscsi || echo "command not available";
+          echo "cat /etc/fstab";
           cat /etc/fstab || echo "command not available";
+          echo "cat /etc/resolv.conf";
           cat /etc/resolv.conf || echo "command not available";
+          echo "mount";
           mount || echo "command not available";
+          echo "cat /etc/*release";
           cat /etc/*release || echo "command not available";
+          echo "cat /etc/hosts";
           cat /etc/hosts || echo "command not available";
+          echo "ls -l /dev/mapper";
           ls -l /dev/mapper || echo "command not available";
+          echo "cat /boot/grub/menu.lst";
           cat /boot/grub/menu.lst || echo "command not available";
+          echo "cat /boot/grub2/grub.cfg | grep -v ^#";
           cat /boot/grub2/grub.cfg | grep -v ^# || echo "command not available";
+          echo "cat /boot/grub2/grub.cfg";
           cat /boot/grub2/grub.cfg || echo "command not available";
+          echo "lvs -a -o +devices -P";
           lvs -a -o +devices -P || echo "command not available";
+          echo "lvs --segments";
           lvs --segments || echo "command not available";
+          echo "lvs -o+lv_layout,stripes";
           lvs -o+lv_layout,stripes || echo "command not available";
+          echo "lvs -a -o+lv_layout,lv_role,stripes,devices";
           lvs -a -o+lv_layout,lv_role,stripes,devices || echo "command not available";
+          echo "free -g";
           free -g || echo "command not available";
+          echo "lscpu";
           lscpu || echo "command not available";
+          echo "df -h";
           df -h || echo "command not available";
+          echo "cat /etc/passwd";
           cat /etc/passwd || echo "command not available";
+          echo "cat /etc/shadow";
           cat /etc/shadow || echo "command not available";
+          echo "cat /etc/shadow";
+          cat /etc/shadow || echo "command not available";
+          echo "cat /etc/group";
           cat /etc/group || echo "command not available";
+          echo "ls -l /boot/";
           ls -l /boot/ || echo "command not available";
         } >> /tmp/{{ inventory_hostname }}_{{ ansible_date_time.date }}.out 2>&1
       ignore_errors: yes
+      warn: false
 
     - name: Ensure destination directory exists on remote server
       ansible.builtin.shell: mkdir -p /home/svc_aux/backup
       delegate_to: 10.1.128.84
+      warn: false
 
     - name: Fetch output file to controller
       ansible.builtin.fetch:
@@ -122,3 +204,4 @@
       delegate_to: localhost
       vars:
         ansible_ssh_pass: just44now
+      warn: false
