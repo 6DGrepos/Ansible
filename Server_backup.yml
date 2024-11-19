@@ -1,12 +1,13 @@
 ---
 - name: Collect system information and send to remote server
-  hosts: all
+  hosts: localhost
   become: yes
   gather_facts: no
+  vars:
+    output_file: "/tmp/system_info_{{ inventory_hostname }}_{{ ansible_date_time.iso8601_basic }}.log"
   tasks:
     - name: Generate system information output file
       shell: |
-        output_file="/tmp/system_info_$(hostname)_$(date +%Y%m%d_%H%M%S).log"
         {
           echo "==== Process Information ===="
           ps aux | grep -E 'httpd|nginx|apache2'
@@ -108,8 +109,6 @@
         src: "{{ output_file }}"
         dest: "/home/svc_aux/backup/{{ inventory_hostname }}_{{ ansible_date_time.iso8601_basic }}.out"
         remote_src: yes
-      vars:
-        output_file: "/tmp/system_info_{{ inventory_hostname }}_{{ ansible_date_time.iso8601_basic }}.log"
 
     - name: Clean up local temporary file
       file:
