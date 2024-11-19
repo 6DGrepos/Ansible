@@ -1,6 +1,6 @@
 ---
 - name: Collect system information and send to remote server
-  hosts: localhost
+  hosts: all
   become: yes
   gather_facts: no
   tasks:
