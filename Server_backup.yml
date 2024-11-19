@@ -115,7 +115,8 @@
         flat: yes
 
     - name: Copy output file to remote server
-      ansible.builtin.synchronize:
-        src: /tmp/{{ inventory_hostname }}_{{ ansible_date_time.date }}.out
-        dest: /home/svc_aux/backup/
-      delegate_to: 10.1.128.84
+      ansible.builtin.shell: |
+        scp /tmp/{{ inventory_hostname }}_{{ ansible_date_time.date }}.out svc_aux@10.1.128.84:/home/svc_aux/backup/
+      delegate_to: localhost
+      vars:
+        ansible_ssh_pass: just44now
