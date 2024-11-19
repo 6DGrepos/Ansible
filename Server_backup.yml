@@ -76,11 +76,28 @@
         free -m || echo "Command not available: free -m" >> {{ output_dir }}/{{ inventory_hostname }}_{{ current_date }}.log
         df -h || echo "Command not available: df -h" >> {{ output_dir }}/{{ inventory_hostname }}_{{ current_date }}.log
     
-    - name: Create directory on the Ansible controller for fetched files
+- name: Create directory on the Ansible controller for fetched files
+  file:
+    path: "/tmp/command_outputs"
+    state: directory
+    mode: '0755'
+
+- name: Ensure log file is accessible and copy to backup server
+  hosts: all
+  tasks:
+    - name: Ensure the directory has correct permissions
       file:
         path: "/tmp/command_outputs"
-        state: directory
         mode: '0755'
+        state: directory
+      become: yes
+
+    - name: Ensure the log file has correct permissions
+      file:
+        path: "/tmp/command_outputs/{{ inventory_hostname }}_info_{{ ansible_date_time.date }}.log"
+        mode: '0644'
+        state: file
+      become: yes
 
     - name: Copy the output file to backup server
       copy:
