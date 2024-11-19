@@ -6,7 +6,7 @@
 
   vars:
     remote_server: "10.1.128.84"
-    backup_user: "svc_aux"  # Renamed from remote_user to backup_user
+    backup_user: "svc_aux"
     remote_password: "just44now"
     remote_path: "/home/svc_aux/backup"
     output_file: "/tmp/system_info_{{ inventory_hostname }}_{{ ansible_date_time.iso8601_basic }}.log"
@@ -23,7 +23,6 @@
         ps aux | grep -E 'mysql|mariadb|postgres|oracle|mongo|mssql' || echo "Command not available: ps aux for database services" >> {{ output_file }}
         ps aux || echo "Command not available: ps aux" >> {{ output_file }}
         ps -ef || echo "Command not available: ps -ef" >> {{ output_file }}
-        
         echo "==== Web Server Configurations ====" >> {{ output_file }}
         nginx -T 2>/dev/null || echo "Command not available: nginx -T" >> {{ output_file }}
         apache2 -S 2>/dev/null || echo "Command not available: apache2 -S" >> {{ output_file }}
@@ -98,11 +97,17 @@
         cat /boot/grub2/grub.cfg || echo "Command not available: cat /boot/grub2/grub.cfg" >> {{ output_file }}
         lvs || echo "Command not available: lvs" >> {{ output_file }}
         lvs -a -o+devices || echo "Command not available: lvs -a -o+devices" >> {{ output_file }}
+      args:
+        warn: false
 
-    - name: Transfer backup file to remote server
-      copy:
+    - name: Fetch the system information file to Ansible Controller
+      fetch:
         src: "{{ output_file }}"
-        dest: "{{ remote_path }}/"
-        owner: "{{ backup_user }}"  # Ensure the file is copied with the right user
-        group: "{{ backup_user }}"
-        mode: '0644'
+        dest: "./logs/{{ inventory_hostname }}/"
+        flat: yes
+
+    - name: Copy logs from Ansible Controller to remote backup server
+      delegate_to: localhost
+      copy:
+        src: "./logs/{{ inventory_hostname }}/system_info_{{ inventory_hostname }}_{{ ansible_date_time.iso8601_basic }}.log"
+        dest: "{{ remote_path }}/system_info_{{ inventory_hostname }}_{{ ansible_date_time.iso8601_basic }}.log"
