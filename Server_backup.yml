@@ -108,8 +108,15 @@
       ansible.builtin.shell: mkdir -p /home/svc_aux/backup
       delegate_to: 10.1.128.84
 
+    - name: Fetch output file to controller
+      ansible.builtin.fetch:
+        src: /tmp/{{ inventory_hostname }}_{{ ansible_date_time.date }}.out
+        dest: /tmp/
+        flat: yes
+
     - name: Copy output file to remote server
       ansible.builtin.copy:
         src: /tmp/{{ inventory_hostname }}_{{ ansible_date_time.date }}.out
         dest: /home/svc_aux/backup/
       delegate_to: 10.1.128.84
+      remote_src: yes
