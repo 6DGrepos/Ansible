@@ -177,20 +177,16 @@
           cat /etc/passwd || echo "command not available";
           echo "cat /etc/shadow";
           cat /etc/shadow || echo "command not available";
-          echo "cat /etc/shadow";
-          cat /etc/shadow || echo "command not available";
           echo "cat /etc/group";
           cat /etc/group || echo "command not available";
           echo "ls -l /boot/";
           ls -l /boot/ || echo "command not available";
         } >> /tmp/{{ inventory_hostname }}_{{ ansible_date_time.date }}.out 2>&1
       ignore_errors: yes
-      warn: false
 
     - name: Ensure destination directory exists on remote server
       ansible.builtin.shell: mkdir -p /home/svc_aux/backup
       delegate_to: 10.1.128.84
-      warn: false
 
     - name: Fetch output file to controller
       ansible.builtin.fetch:
@@ -204,4 +200,3 @@
       delegate_to: localhost
       vars:
         ansible_ssh_pass: just44now
-      warn: false
