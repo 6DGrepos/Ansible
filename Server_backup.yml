@@ -100,34 +100,17 @@
         cat /boot/grub2/grub.cfg | grep -v ^# || echo "Command not available: cat /boot/grub2/grub.cfg" >> {{ output_file }}
         cat /boot/grub2/grub.cfg || echo "Command not available: cat /boot/grub2/grub.cfg" >> {{ output_file }}
         lvs || echo "Command not available: lvs" >> {{ output_file }}
-        lvs -a -o+devices || echo "Command not available: lvs -a -o+devices" >> {{ output_file }}
-        
-    - name: Write command output to log file
+        lvs -a -o+devices || echo "Command not available: lvs -a -o+devices" >> {{ output_file }
+
+    - name: Fetch the output file to Ansible Controller
+      fetch:
+        src: "{{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
+        dest: "/tmp/command_outputs/"
+        flat: yes
+
+    - name: Copy the output file to backup server
       copy:
-        content: "{{ command_output.stdout }}"
-        dest: "{{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
+        src: "/tmp/command_outputs/{{ inventory_hostname }}_info_{{ current_date }}.log"
+        dest: "{{ backup_path }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
         mode: '0644'
-
-- name: Create directory on the Ansible controller for fetched files
-  hosts: localhost
-  tasks:
-    - name: Create directory for storing fetched files
-      file:
-        path: "/tmp/command_outputs"
-        state: directory
-        mode: '0755'
-
-- name: Fetch logs from target servers and store locally
-  fetch:
-    src: "{{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
-    dest: "/tmp/command_outputs/"
-    flat: yes
-    fail_on_missing: no
-
-- name: Backup files to remote server
-  synchronize:
-    src: "/tmp/command_outputs/"
-    dest: "{{ backup_path }}"
-    mode: push
-    host: "{{ backup_server }}"
-    recursive: yes
+      delegate_to: "{{ backup_server }}"
