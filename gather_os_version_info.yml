@@ -12,14 +12,28 @@
       ansible.builtin.set_fact:
         os_version: "{{ ansible_distribution }} {{ ansible_distribution_version }}"
 
+    - name: Get hostname using uname -n
+      ansible.builtin.command:
+        cmd: uname -n
+      register: uname_output
+
+    - name: Set hostname fact
+      ansible.builtin.set_fact:
+        hostname_uname: "{{ uname_output.stdout }}"
+
     - name: Print collected information
       ansible.builtin.debug:
-        msg: "IP Address: {{ ip_address }}, OS Version: {{ os_version }}"
+        msg: |
+          IP Address: {{ ip_address }}
+          OS Version: {{ os_version }}
+          Hostname (uname -n): {{ hostname_uname }}
 
     - name: Save information to a file
       ansible.builtin.copy:
         content: |
           IP Address: {{ ip_address }}
           OS Version: {{ os_version }}
+          Hostname (uname -n): {{ hostname_uname }}
         dest: "/tmp/system_info_{{ ansible_hostname }}.txt"
+
 
