@@ -1,6 +1,3 @@
-Sure, I can help with that! Here's the modified Ansible playbook that includes a task to transfer the output file to the server `10.1.128.84` in the directory `/home/svc_aux/backup`. It will create the directory if it doesn't exist.
-
-```yaml
 ---
 - name: Execute commands and store output
   hosts: all
