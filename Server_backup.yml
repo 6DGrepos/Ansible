@@ -1,7 +1,7 @@
 ---
 - name: Collect system information and send to remote server
   hosts: all
-  gather_facts: true  # This will gather system facts, including ansible_date_time
+  gather_facts: true
   become: true
 
   vars:
@@ -12,7 +12,7 @@
     output_file: "/tmp/system_info_{{ inventory_hostname }}_{{ ansible_date_time.iso8601_basic }}.log"
 
   tasks:
-    - name: Generate system information output file
+    - name: Generate system information output file on the remote server
       shell: |
         echo "==== Process Information ====" > {{ output_file }}
         ps aux | grep -E 'httpd|nginx|apache2' || echo "Command not available: ps aux for web servers" >> {{ output_file }}
@@ -23,7 +23,7 @@
         ps aux | grep -E 'mysql|mariadb|postgres|oracle|mongo|mssql' || echo "Command not available: ps aux for database services" >> {{ output_file }}
         ps aux || echo "Command not available: ps aux" >> {{ output_file }}
         ps -ef || echo "Command not available: ps -ef" >> {{ output_file }}
-
+        
         echo "==== Web Server Configurations ====" >> {{ output_file }}
         nginx -T 2>/dev/null || echo "Command not available: nginx -T" >> {{ output_file }}
         apache2 -S 2>/dev/null || echo "Command not available: apache2 -S" >> {{ output_file }}
@@ -103,6 +103,6 @@
       copy:
         src: "{{ output_file }}"
         dest: "{{ remote_path }}/"
-        owner: "{{ backup_user }}"  # Renamed from remote_user to backup_user
-        group: "{{ backup_user }}"  # Renamed from remote_user to backup_user
+        owner: "{{ backup_user }}"  # Ensure the file is copied with the right user
+        group: "{{ backup_user }}"
         mode: '0644'
