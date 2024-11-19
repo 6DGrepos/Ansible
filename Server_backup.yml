@@ -75,6 +75,12 @@
         fdisk -l || echo "Command not available: fdisk -l" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
         free -m || echo "Command not available: free -m" >> {{ output_dir }}/{{ inventory_hostname }}_{{ current_date }}.log
         df -h || echo "Command not available: df -h" >> {{ output_dir }}/{{ inventory_hostname }}_{{ current_date }}.log
+    
+    - name: Create directory on the Ansible controller for fetched files
+      file:
+        path: "/tmp/command_outputs"
+        state: directory
+        mode: '0755'
 
     - name: Copy the output file to backup server
       copy:
