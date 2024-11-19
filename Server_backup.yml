@@ -1,12 +1,12 @@
 ---
 - name: Collect system information and send to remote server
   hosts: all
-  gather_facts: false
+  gather_facts: true  # This will gather system facts, including ansible_date_time
   become: true
 
   vars:
     remote_server: "10.1.128.84"
-    remote_user: "svc_aux"
+    backup_user: "svc_aux"  # Renamed from remote_user to backup_user
     remote_password: "just44now"
     remote_path: "/home/svc_aux/backup"
     output_file: "/tmp/system_info_{{ inventory_hostname }}_{{ ansible_date_time.iso8601_basic }}.log"
@@ -96,15 +96,13 @@
         cat /boot/grub/menu.lst || echo "Command not available: cat /boot/grub/menu.lst" >> {{ output_file }}
         cat /boot/grub2/grub.cfg | grep -v ^# || echo "Command not available: cat /boot/grub2/grub.cfg" >> {{ output_file }}
         cat /boot/grub2/grub.cfg || echo "Command not available: cat /boot/grub2/grub.cfg" >> {{ output_file }}
-        lvs -a -o +devices -P || echo "Command not available: lvs -a" >> {{ output_file }}
-        lvs --segments || echo "Command not available: lvs --segments" >> {{ output_file }}
-        lvs -o+lv_layout,stripes || echo "Command not available: lvs -o+lv_layout,stripes" >> {{ output_file }}
-        lvs -a -o +devices || echo "Command not available: lvs -a -o+devices" >> {{ output_file }}
+        lvs || echo "Command not available: lvs" >> {{ output_file }}
+        lvs -a -o+devices || echo "Command not available: lvs -a -o+devices" >> {{ output_file }}
 
     - name: Transfer backup file to remote server
       copy:
         src: "{{ output_file }}"
         dest: "{{ remote_path }}/"
-        owner: "{{ remote_user }}"
-        group: "{{ remote_user }}"
+        owner: "{{ backup_user }}"  # Renamed from remote_user to backup_user
+        group: "{{ backup_user }}"  # Renamed from remote_user to backup_user
         mode: '0644'
