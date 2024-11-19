@@ -95,21 +95,30 @@
         lvs -a -o+devices || echo "Command not available: lvs -a -o+devices" >> {{ output_file }}
       ignore_errors: true
 
-    - name: Ensure backup directory exists on the remote server
-      ansible.builtin.command:
-        cmd: mkdir -p {{ backup_path }}
-      delegate_to: "{{ backup_server }}"
-      become: yes
+  - name: Ensure backup directory exists on the remote server
+  ansible.builtin.command:
+    cmd: mkdir -p {{ backup_path }}
+  delegate_to: "{{ backup_server }}"
+  become: yes
 
-    - name: Transfer log files to remote backup server
-      ansible.builtin.copy:
-        src: "{{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
-        dest: "{{ backup_path }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
-        remote_src: yes
-      delegate_to: "{{ backup_server }}"
-      become: yes
+- name: Check if log file exists on remote host
+  ansible.builtin.stat:
+    path: "/tmp/command_outputs/{{ inventory_hostname }}_info_{{ current_date }}.log"
+  register: log_file_stat
 
-    - name: Clean up local log files from target servers
-      file:
-        path: "{{ output_dir }}"
-        state: absent
+- name: Debug log file existence
+  ansible.builtin.debug:
+    msg: "Log file exists: {{ log_file_stat.stat.exists }}"
+
+- name: Transfer log files to remote backup server
+  ansible.builtin.copy:
+    src: "{{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
+    dest: "{{ backup_path }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
+    remote_src: yes
+  delegate_to: "{{ backup_server }}"
+  become: yes
+
+- name: Clean up local log files from target servers
+  ansible.builtin.file:
+    path: "{{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
+    state: absent
