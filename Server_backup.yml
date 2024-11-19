@@ -73,17 +73,12 @@
         ip route show || echo "Command not available: ip route show" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
         netstat -nr || echo "Command not available: netstat -nr" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
         fdisk -l || echo "Command not available: fdisk -l" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
-        rpm -qa --last || echo "Command not available: rpm -qa" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
-        vgdisplay || echo "Command not available: vgdisplay" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
-        lvdisplay || echo "Command not available: lvdisplay" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
-        free -m || echo "Command not available: free -m" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
-        df -h || echo "Command not available: df -h" >> {{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log
+        free -m || echo "Command not available: free -m" >> {{ output_dir }}/{{ inventory_hostname }}_{{ current_date }}.log
+        df -h || echo "Command not available: df -h" >> {{ output_dir }}/{{ inventory_hostname }}_{{ current_date }}.log
 
     - name: Copy the output file to backup server
-      synchronize:
+      copy:
         src: "{{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
         dest: "{{ backup_path }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
-        mode: push
-        remote_src: no
-        delete: yes
+        mode: '0644'
       delegate_to: "{{ backup_server }}"
