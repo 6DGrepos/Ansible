@@ -1,203 +1,110 @@
 ---
 - name: Collect system information and send to remote server
-  hosts: localhost
-  become: yes
-  gather_facts: yes
+  hosts: all
+  gather_facts: false
+  become: true
+
   vars:
+    remote_server: "10.1.128.84"
+    remote_user: "svc_aux"
+    remote_password: "just44now"
+    remote_path: "/home/svc_aux/backup"
     output_file: "/tmp/system_info_{{ inventory_hostname }}_{{ ansible_date_time.iso8601_basic }}.log"
+
   tasks:
     - name: Generate system information output file
       shell: |
-        echo "==== Process Information ====" > "{{ output_file }}"
-        if command -v ps >/dev/null 2>&1; then
-          ps aux | grep -E 'httpd|nginx|apache2' >> "{{ output_file }}"
-          ps aux | grep -E 'mysql|mariadb' >> "{{ output_file }}"
-          ps aux | grep postgres >> "{{ output_file }}"
-          ps aux | grep pmon >> "{{ output_file }}"
-          ps aux | grep mongo >> "{{ output_file }}"
-          ps aux | grep -E 'mysql|mariadb|postgres|oracle|mongo|mssql' >> "{{ output_file }}"
-          ps aux >> "{{ output_file }}"
-          ps -ef >> "{{ output_file }}"
-        else
-          echo "ps command not available" >> "{{ output_file }}"
-        fi
+        echo "==== Process Information ====" > {{ output_file }}
+        ps aux | grep -E 'httpd|nginx|apache2' || echo "Command not available: ps aux for web servers" >> {{ output_file }}
+        ps aux | grep -E 'mysql|mariadb' || echo "Command not available: ps aux for mysql/mariadb" >> {{ output_file }}
+        ps aux | grep postgres || echo "Command not available: ps aux for postgres" >> {{ output_file }}
+        ps aux | grep pmon || echo "Command not available: ps aux for pmon" >> {{ output_file }}
+        ps aux | grep mongo || echo "Command not available: ps aux for mongo" >> {{ output_file }}
+        ps aux | grep -E 'mysql|mariadb|postgres|oracle|mongo|mssql' || echo "Command not available: ps aux for database services" >> {{ output_file }}
+        ps aux || echo "Command not available: ps aux" >> {{ output_file }}
+        ps -ef || echo "Command not available: ps -ef" >> {{ output_file }}
 
-        echo "==== Web Server Configurations ====" >> "{{ output_file }}"
-        if command -v nginx >/dev/null 2>&1; then
-          nginx -T 2>/dev/null >> "{{ output_file }}"
-        else
-          echo "nginx command not available" >> "{{ output_file }}"
-        fi
-        if command -v apache2 >/dev/null 2>&1; then
-          apache2 -S 2>/dev/null >> "{{ output_file }}"
-        else
-          echo "apache2 command not available" >> "{{ output_file }}"
-        fi
-        if command -v apache2ctl >/dev/null 2>&1; then
-          apache2ctl -S 2>/dev/null >> "{{ output_file }}"
-        else
-          echo "apache2ctl command not available" >> "{{ output_file }}"
-        fi
-        if command -v httpd >/dev/null 2>&1; then
-          httpd -S 2>/dev/null >> "{{ output_file }}"
-        else
-          echo "httpd command not available" >> "{{ output_file }}"
-        fi
+        echo "==== Web Server Configurations ====" >> {{ output_file }}
+        nginx -T 2>/dev/null || echo "Command not available: nginx -T" >> {{ output_file }}
+        apache2 -S 2>/dev/null || echo "Command not available: apache2 -S" >> {{ output_file }}
+        apache2ctl -S 2>/dev/null || echo "Command not available: apache2ctl -S" >> {{ output_file }}
+        httpd -S 2>/dev/null || echo "Command not available: httpd -S" >> {{ output_file }}
 
-        echo "==== Open Ports and Connections ====" >> "{{ output_file }}"
-        if command -v netstat >/dev/null 2>&1; then
-          netstat -plant >> "{{ output_file }}"
-          netstat -tulpn >> "{{ output_file }}"
-          netstat -tulnp | grep -E '80|443' >> "{{ output_file }}"
-        else
-          echo "netstat command not available" >> "{{ output_file }}"
-        fi
-        if command -v ss >/dev/null 2>&1; then
-          ss >> "{{ output_file }}"
-        else
-          echo "ss command not available" >> "{{ output_file }}"
-        fi
+        echo "==== Open Ports and Connections ====" >> {{ output_file }}
+        netstat -plant || echo "Command not available: netstat -plant" >> {{ output_file }}
+        netstat -tulpn || echo "Command not available: netstat -tulpn" >> {{ output_file }}
+        netstat -tulnp | grep -E '80|443' || echo "Command not available: netstat for ports 80/443" >> {{ output_file }}
+        ss || echo "Command not available: ss" >> {{ output_file }}
+        netstat -plant | grep -i listen || echo "Command not available: netstat for listen" >> {{ output_file }}
 
-        echo "==== System Services Status ====" >> "{{ output_file }}"
-        for service in mysql mariadb postgresql mongod mssql-server apache2.service php-fpm; do
-          if systemctl is-active --quiet $service; then
-            systemctl status $service >> "{{ output_file }}"
-          else
-            echo "$service service not available" >> "{{ output_file }}"
-          fi
-        done
-        if command -v lsnrctl >/dev/null 2>&1; then
-          lsnrctl status >> "{{ output_file }}"
-        else
-          echo "lsnrctl command not available" >> "{{ output_file }}"
-        fi
-        if command -v systemctl >/dev/null 2>&1; then
-          systemctl list-units --state=running >> "{{ output_file }}"
-          systemctl list-unit-files >> "{{ output_file }}"
-        else
-          echo "systemctl command not available" >> "{{ output_file }}"
-        fi
+        echo "==== System Services Status ====" >> {{ output_file }}
+        systemctl status mysql || echo "Service not available: mysql" >> {{ output_file }}
+        systemctl status mariadb || echo "Service not available: mariadb" >> {{ output_file }}
+        systemctl status postgresql || echo "Service not available: postgresql" >> {{ output_file }}
+        lsnrctl status || echo "Service not available: lsnrctl" >> {{ output_file }}
+        systemctl status mongod || echo "Service not available: mongod" >> {{ output_file }}
+        systemctl status mssql-server || echo "Service not available: mssql-server" >> {{ output_file }}
+        systemctl status apache2.service || echo "Service not available: apache2" >> {{ output_file }}
+        systemctl status php-fpm || echo "Service not available: php-fpm" >> {{ output_file }}
+        systemctl list-units --state=running || echo "Command not available: systemctl list-units" >> {{ output_file }}
+        systemctl list-unit-files || echo "Command not available: systemctl list-unit-files" >> {{ output_file }}
 
-        echo "==== PHP Information ====" >> "{{ output_file }}"
-        if command -v php >/dev/null 2>&1; then
-          php -v >> "{{ output_file }}"
-          php -m >> "{{ output_file }}"
-          if command -v apachectl >/dev/null 2>&1; then
-            apachectl -M | grep php >> "{{ output_file }}"
-          else
-            echo "apachectl command not available" >> "{{ output_file }}"
-          fi
-        else
-          echo "php command not available" >> "{{ output_file }}"
-        fi
+        echo "==== Web Server Configurations ====" >> {{ output_file }}
+        grep -R "ServerName" /etc/httpd/ || echo "Command not available: grep ServerName in /etc/httpd/" >> {{ output_file }}
+        grep -R "ServerName" /etc/apache2/ || echo "Command not available: grep ServerName in /etc/apache2/" >> {{ output_file }}
+        grep -R "server_name" /etc/nginx/ || echo "Command not available: grep server_name in /etc/nginx/" >> {{ output_file }}
+        grep DocumentRoot /etc/httpd/conf/httpd.conf || echo "Command not available: grep DocumentRoot in /etc/httpd/" >> {{ output_file }}
+        grep DocumentRoot /etc/apache2/sites-available/*.conf || echo "Command not available: grep DocumentRoot in /etc/apache2/sites-available/" >> {{ output_file }}
+        grep root /etc/nginx/sites-available/*.conf || echo "Command not available: grep root in /etc/nginx/sites-available/" >> {{ output_file }}
+        grep -Ri "DocumentRoot" /etc/apache2/ || echo "Command not available: grep DocumentRoot recursively in /etc/apache2/" >> {{ output_file }}
+        grep -Ri "server_name" /etc/nginx/ || echo "Command not available: grep server_name recursively in /etc/nginx/" >> {{ output_file }}
+        grep -Ri "fastcgi_pass" /etc/nginx/ || echo "Command not available: grep fastcgi_pass recursively in /etc/nginx/" >> {{ output_file }}
 
-        echo "==== Docker Information ====" >> "{{ output_file }}"
-        if command -v docker >/dev/null 2>&1; then
-          docker ps >> "{{ output_file }}"
-          docker ps -a >> "{{ output_file }}"
-          docker images -a >> "{{ output_file }}"
-        else
-          echo "docker command not available" >> "{{ output_file }}"
-        fi
+        echo "==== PHP Information ====" >> {{ output_file }}
+        php -v || echo "Command not available: php -v" >> {{ output_file }}
+        php -m || echo "Command not available: php -m" >> {{ output_file }}
+        apachectl -M | grep php || echo "Command not available: apachectl for php" >> {{ output_file }}
 
-        echo "==== System Information ====" >> "{{ output_file }}"
-        if command -v uname >/dev/null 2>&1; then
-          uname -a >> "{{ output_file }}"
-        else
-          echo "uname command not available" >> "{{ output_file }}"
-        fi
-        if command -v ifconfig >/dev/null 2>&1; then
-          ifconfig -a >> "{{ output_file }}"
-        else
-          echo "ifconfig command not available" >> "{{ output_file }}"
-        fi
-        if command -v ip >/dev/null 2>&1; then
-          ip a >> "{{ output_file }}"
-          ip route show >> "{{ output_file }}"
-        else
-          echo "ip command not available" >> "{{ output_file }}"
-        fi
-        if command -v netstat >/dev/null 2>&1; then
-          netstat -nr >> "{{ output_file }}"
-        else
-          echo "netstat command not available" >> "{{ output_file }}"
-        fi
-        if command -v fdisk >/dev/null 2>&1; then
-          fdisk -l >> "{{ output_file }}"
-        else
-          echo "fdisk command not available" >> "{{ output_file }}"
-        fi
-        if command -v rpm >/dev/null 2>&1; then
-          rpm -qa --last >> "{{ output_file }}"
-        else
-          echo "rpm command not available" >> "{{ output_file }}"
-        fi
-        if command -v vgdisplay >/dev/null 2>&1; then
-          vgdisplay >> "{{ output_file }}"
-        else
-          echo "vgdisplay command not available" >> "{{ output_file }}"
-        fi
-        if command -v lvdisplay >/dev/null 2>&1; then
-          lvdisplay >> "{{ output_file }}"
-        else
-          echo "lvdisplay command not available" >> "{{ output_file }}"
-        fi
-        if command -v pvs >/dev/null 2>&1; then
-          pvs >> "{{ output_file }}"
-        else
-          echo "pvs command not available" >> "{{ output_file }}"
-        fi
-        if command -v vgs >/dev/null 2>&1; then
-          vgs >> "{{ output_file }}"
-        else
-          echo "vgs command not available" >> "{{ output_file }}"
-        fi
-        if command -v lsblk >/dev/null 2>&1; then
-          lsblk -d >> "{{ output_file }}"
-          lsblk >> "{{ output_file }}"
-        else
-          echo "lsblk command not available" >> "{{ output_file }}"
-        fi
-        if command -v blkid >/dev/null 2>&1; then
-          blkid >> "{{ output_file }}"
-        else
-          echo "blkid command not available" >> "{{ output_file }}"
-        fi
-        if command -v lsscsi >/dev/null 2>&1; then
-          lsscsi >> "{{ output_file }}"
-        else
-          echo "lsscsi command not available" >> "{{ output_file }}"
-        fi
-        if command -v cat >/dev/null 2>&1; then
-          cat /etc/fstab >> "{{ output_file }}"
-          cat /etc/resolv.conf >> "{{ output_file }}"
-          cat /etc/passwd >> "{{ output_file }}"
-          cat /etc/shadow >> "{{ output_file }}"
-          cat /etc/group >> "{{ output_file }}"
-          cat /etc/hosts >> "{{ output_file }}"
-          cat /boot/grub/menu.lst >> "{{ output_file }}"
-          cat /boot/grub2/grub.cfg | grep -v ^# >> "{{ output_file }}"
-          cat /boot/grub2/grub.cfg >> "{{ output_file }}"
-        else
-          echo "cat command not available" >> "{{ output_file }}"
-        fi
+        echo "==== Docker Information ====" >> {{ output_file }}
+        docker ps || echo "Command not available: docker ps" >> {{ output_file }}
+        docker ps -a || echo "Command not available: docker ps -a" >> {{ output_file }}
+        docker images -a || echo "Command not available: docker images -a" >> {{ output_file }}
+        docker images || echo "Command not available: docker images" >> {{ output_file }}
 
-        echo "==== Free System Resources ====" >> "{{ output_file }}"
-        free -g >> "{{ output_file }}"
-        lscpu >> "{{ output_file }}"
-        df -h >> "{{ output_file }}"
+        echo "==== System Information ====" >> {{ output_file }}
+        uname -a || echo "Command not available: uname -a" >> {{ output_file }}
+        ifconfig -a || echo "Command not available: ifconfig -a" >> {{ output_file }}
+        ip a || echo "Command not available: ip a" >> {{ output_file }}
+        ip route show || echo "Command not available: ip route show" >> {{ output_file }}
+        netstat -nr || echo "Command not available: netstat -nr" >> {{ output_file }}
+        fdisk -l || echo "Command not available: fdisk -l" >> {{ output_file }}
+        rpm -qa --last || echo "Command not available: rpm -qa" >> {{ output_file }}
+        vgdisplay || echo "Command not available: vgdisplay" >> {{ output_file }}
+        lvdisplay || echo "Command not available: lvdisplay" >> {{ output_file }}
+        pvs || echo "Command not available: pvs" >> {{ output_file }}
+        vgs || echo "Command not available: vgs" >> {{ output_file }}
+        lsblk -d || echo "Command not available: lsblk -d" >> {{ output_file }}
+        lsblk || echo "Command not available: lsblk" >> {{ output_file }}
+        blkid || echo "Command not available: blkid" >> {{ output_file }}
+        lsscsi || echo "Command not available: lsscsi" >> {{ output_file }}
+        cat /etc/fstab || echo "Command not available: cat /etc/fstab" >> {{ output_file }}
+        cat /etc/resolv.conf || echo "Command not available: cat /etc/resolv.conf" >> {{ output_file }}
+        mount || echo "Command not available: mount" >> {{ output_file }}
+        cat /etc/*release || echo "Command not available: cat /etc/*release" >> {{ output_file }}
+        cat /etc/hosts || echo "Command not available: cat /etc/hosts" >> {{ output_file }}
+        ls -l /dev/mapper || echo "Command not available: ls -l /dev/mapper" >> {{ output_file }}
+        cat /boot/grub/menu.lst || echo "Command not available: cat /boot/grub/menu.lst" >> {{ output_file }}
+        cat /boot/grub2/grub.cfg | grep -v ^# || echo "Command not available: cat /boot/grub2/grub.cfg" >> {{ output_file }}
+        cat /boot/grub2/grub.cfg || echo "Command not available: cat /boot/grub2/grub.cfg" >> {{ output_file }}
+        lvs -a -o +devices -P || echo "Command not available: lvs -a" >> {{ output_file }}
+        lvs --segments || echo "Command not available: lvs --segments" >> {{ output_file }}
+        lvs -o+lv_layout,stripes || echo "Command not available: lvs -o+lv_layout,stripes" >> {{ output_file }}
+        lvs -a -o +devices || echo "Command not available: lvs -a -o+devices" >> {{ output_file }}
 
-        echo "==== Logical Volume Information ====" >> "{{ output_file }}"
-        if command -v lvs >/dev/null 2>&1; then
-          lvs -a -o +devices -P >> "{{ output_file }}"
-          lvs --segments >> "{{ output_file }}"
-          lvs -o+lv_layout,stripes >> "{{ output_file }}"
-          lvs -a -o+lv_layout,lv_role,stripes,devices >> "{{ output_file }}"
-        else
-          echo "lvs command not available" >> "{{ output_file }}"
-        fi
-      args:
-        creates: "{{ output_file }}"
-
-    - name: Copy system information to remote server
-      ansible.b
+    - name: Transfer backup file to remote server
+      copy:
+        src: "{{ output_file }}"
+        dest: "{{ remote_path }}/"
+        owner: "{{ remote_user }}"
+        group: "{{ remote_user }}"
+        mode: '0644'
