@@ -105,6 +105,7 @@
       ansible.builtin.copy:
         src: "{{ output_dir }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
         dest: "{{ backup_path }}/{{ inventory_hostname }}_info_{{ current_date }}.log"
+        remote_src: yes
       delegate_to: "{{ backup_server }}"
       become: yes
 
