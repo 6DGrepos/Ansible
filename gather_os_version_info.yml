@@ -19,21 +19,19 @@
 
     - name: Set hostname fact
       ansible.builtin.set_fact:
-        hostname_uname: "{{ uname_output.stdout }}"
+        hostname: "{{ uname_output.stdout }}"
 
     - name: Print collected information
       ansible.builtin.debug:
-        msg: |
+        msg: >
+          Hostname: {{ hostname }}
           IP Address: {{ ip_address }}
           OS Version: {{ os_version }}
-          Hostname (uname -n): {{ hostname_uname }}
 
     - name: Save information to a file
       ansible.builtin.copy:
         content: |
+          Hostname: {{ hostname }}
           IP Address: {{ ip_address }}
           OS Version: {{ os_version }}
-          Hostname (uname -n): {{ hostname_uname }}
-        dest: "/tmp/system_info_{{ ansible_hostname }}.txt"
-
-
+        dest: "/tmp/system_info_{{ hostname }}.txt"
