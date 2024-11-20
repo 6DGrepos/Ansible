@@ -6,10 +6,6 @@
       command: uname -n
       register: server_hostname
 
-    - name: Set server hostname fact
-      set_fact:
-        server_hostname_fact: "{{ server_hostname.stdout }}"
-
     - name: Check for running database services
       shell: |
         for db in oracle db2sysc mysqld mariadbd mongod postgres redis-server cassandra; do
@@ -64,14 +60,14 @@
         done
       register: web_services
 
-    - name: Create output file
-      file:
-        path: "/home/svc_aux/{{ server_hostname_fact }}.txt"
-        state: touch
+    - name: Create or clear output file
+      copy:
+        content: ""
+        dest: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
 
     - name: Write database information to file
       lineinfile:
-        path: "/home/svc_aux/{{ server_hostname_fact }}.txt"
+        path: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
         line: "{{ item }}"
       with_items:
         - "Database Information:"
@@ -80,7 +76,7 @@
 
     - name: Write database versions to file
       lineinfile:
-        path: "/home/svc_aux/{{ server_hostname_fact }}.txt"
+        path: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
         line: "{{ item }}"
       with_items:
         - ""
@@ -90,7 +86,7 @@
 
     - name: Write PHP version to file
       lineinfile:
-        path: "/home/svc_aux/{{ server_hostname_fact }}.txt"
+        path: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
         line: "{{ item }}"
       with_items:
         - ""
@@ -100,34 +96,10 @@
 
     - name: Write web services status to file
       lineinfile:
-        path: "/home/svc_aux/{{ server_hostname_fact }}.txt"
+        path: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
         line: "{{ item }}"
       with_items:
         - ""
         - "Web Services Status:"
         - "--------------------"
         - "{{ web_services.stdout_lines | join('\n') }}"
-
-- name: Transfer files to remote server
-  hosts: localhost
-  tasks:
-    - name: Fetch output file from target servers
-      ansible.builtin.fetch:
-        src: "/home/svc_aux/{{ item.server_hostname_fact }}.txt"
-        dest: "/tmp/"
-        flat: yes
-      with_items: "{{ hostvars.values() }}"
-      when: item.server_hostname_fact is defined
-
-    - name: Ensure destination directory exists on remote server
-      ansible.builtin.file:
-        path: /home/svc_aux/backup/services_details
-        state: directory
-      delegate_to: 10.1.34.26
-
-    - name: Copy fetched files to remote server
-      ansible.builtin.shell: |
-        scp /tmp/{{ item.server_hostname_fact }}.txt svc_aux@10.1.34.26:/home/svc_aux/backup/services_details/
-      with_items: "{{ hostvars.values() }}"
-      when: item.server_hostname_fact is defined
-      delegate_to: localhost
