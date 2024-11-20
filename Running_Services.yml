@@ -120,13 +120,13 @@
 
     - name: Fetch output file to controller
       ansible.builtin.fetch:
-        src: /home/svc_aux/{{ server_hostname_fact }}.txt
+        src: /home/svc_aux/{{ hostvars[inventory_hostname].server_hostname_fact }}.txt
         dest: /tmp/
         flat: yes
 
     - name: Copy output file to remote server
       ansible.builtin.shell: |
-        scp /tmp/{{ server_hostname_fact }}.txt svc_aux@10.1.34.26:/home/svc_aux/backup/services_details/
+        scp /tmp/{{ hostvars[inventory_hostname].server_hostname_fact }}.txt svc_aux@10.1.34.26:/home/svc_aux/backup/services_details/
       delegate_to: localhost
       vars:
         ansible_ssh_pass: just44now
