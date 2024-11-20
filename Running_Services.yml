@@ -109,10 +109,3 @@
         src: /home/svc_aux/{{ server_hostname.stdout }}.txt
         dest: /tmp/
         flat: yes
-
-    - name: Copy output file to remote server
-      ansible.builtin.shell: |
-        scp /tmp/{{ server_hostname.stdout }}.txt svc_aux@10.1.34.26:/home/svc_aux/backup/services_details/
-      delegate_to: localhost
-      vars:
-        ansible_ssh_pass: just44now
