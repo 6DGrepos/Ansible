@@ -1,4 +1,3 @@
----
 - name: Check database services, versions, PHP version, and web services
   hosts: all
   become: yes
@@ -109,12 +108,16 @@
         - "--------------------"
         - "{{ web_services.stdout_lines | join('\n') }}"
 
-- name: Ensure destination directory exists on remote server
+- name: Transfer files to remote server
   hosts: localhost
   tasks:
-    - name: Set localhost server hostname fact
-      set_fact:
-        server_hostname_fact: "localhost"
+    - name: Fetch output file from target servers
+      ansible.builtin.fetch:
+        src: "/home/svc_aux/{{ item.server_hostname_fact }}.txt"
+        dest: "/tmp/"
+        flat: yes
+      with_items: "{{ hostvars.values() }}"
+      when: item.server_hostname_fact is defined
 
     - name: Ensure destination directory exists on remote server
       ansible.builtin.file:
@@ -122,15 +125,9 @@
         state: directory
       delegate_to: 10.1.34.26
 
-    - name: Fetch output file to controller
-      ansible.builtin.fetch:
-        src: /home/svc_aux/{{ server_hostname_fact }}.txt
-        dest: /tmp/
-        flat: yes
-
-    - name: Copy output file to remote server
+    - name: Copy fetched files to remote server
       ansible.builtin.shell: |
-        scp /tmp/{{ server_hostname_fact }}.txt svc_aux@10.1.34.26:/home/svc_aux/backup/services_details/
+        scp /tmp/{{ item.server_hostname_fact }}.txt svc_aux@10.1.34.26:/home/svc_aux/backup/services_details/
+      with_items: "{{ hostvars.values() }}"
+      when: item.server_hostname_fact is defined
       delegate_to: localhost
-      vars:
-        ansible_ssh_pass: just44now
