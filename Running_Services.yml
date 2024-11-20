@@ -61,49 +61,42 @@
         done
       register: web_services
 
-    - name: Create output file
-      file:
-        path: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
-        state: touch
+    - name: Clear output file
+      copy:
+        content: ""
+        dest: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
 
     - name: Write database information to file
-      lineinfile:
+      blockinfile:
         path: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
-        line: "{{ item }}"
-      with_items:
-        - "Database Information:"
-        - "---------------------"
-        - "{{ db_services.stdout_lines | join('\n') }}"
+        block: |
+          Database Information:
+          ---------------------
+          {{ db_services.stdout_lines | join('\n') }}
 
     - name: Write database versions to file
-      lineinfile:
+      blockinfile:
         path: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
-        line: "{{ item }}"
-      with_items:
-        - ""
-        - "Database Versions:"
-        - "------------------"
-        - "{{ db_versions.stdout_lines | join('\n') }}"
+        block: |
+          Database Versions:
+          ------------------
+          {{ db_versions.stdout_lines | join('\n') }}
 
     - name: Write PHP version to file
-      lineinfile:
+      blockinfile:
         path: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
-        line: "{{ item }}"
-      with_items:
-        - ""
-        - "PHP Version:"
-        - "------------"
-        - "{{ php_version.stdout }}"
+        block: |
+          PHP Version:
+          ------------
+          {{ php_version.stdout }}
 
     - name: Write web services status to file
-      lineinfile:
+      blockinfile:
         path: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
-        line: "{{ item }}"
-      with_items:
-        - ""
-        - "Web Services Status:"
-        - "--------------------"
-        - "{{ web_services.stdout_lines | join('\n') }}"
+        block: |
+          Web Services Status:
+          --------------------
+          {{ web_services.stdout_lines | join('\n') }}
 
     - name: Ensure destination directory exists on remote server
       ansible.builtin.file:
