@@ -104,3 +104,21 @@
         - "Web Services Status:"
         - "--------------------"
         - "{{ web_services.stdout_lines | join('\n') }}"
+
+    - name: Ensure remote directory exists
+      ansible.builtin.shell: mkdir -p /home/svc_aux/backup/services_details
+      delegate_to: 10.1.34.26
+      become: yes
+      become_user: svc_aux
+      remote_user: svc_aux
+      vars:
+        ansible_ssh_pass: just44now
+
+    - name: Transfer output file to remote server
+      ansible.builtin.copy:
+        src: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
+        dest: "/home/svc_aux/backup/services_details/{{ server_hostname.stdout }}.txt"
+      delegate_to: 10.1.34.26
+      remote_user: svc_aux
+      vars:
+        ansible_ssh_pass: just44now
