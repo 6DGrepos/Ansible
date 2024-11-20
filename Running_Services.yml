@@ -61,22 +61,46 @@
         done
       register: web_services
 
-    - name: Save output to file
-      copy:
-        content: |
-          Database Information:
-          ---------------------
-          {{ db_services.stdout_lines | join('\n') }}
+    - name: Create output file
+      file:
+        path: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
+        state: touch
 
-          Database Versions:
-          ------------------
-          {{ db_versions.stdout_lines | join('\n') }}
+    - name: Write database information to file
+      lineinfile:
+        path: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
+        line: "{{ item }}"
+      with_items:
+        - "Database Information:"
+        - "---------------------"
+        - "{{ db_services.stdout_lines | join('\n') }}"
 
-          PHP Version:
-          ------------
-          {{ php_version.stdout }}
+    - name: Write database versions to file
+      lineinfile:
+        path: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
+        line: "{{ item }}"
+      with_items:
+        - ""
+        - "Database Versions:"
+        - "------------------"
+        - "{{ db_versions.stdout_lines | join('\n') }}"
 
-          Web Services Status:
-          --------------------
-          {{ web_services.stdout_lines | join('\n') }}
-        dest: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
+    - name: Write PHP version to file
+      lineinfile:
+        path: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
+        line: "{{ item }}"
+      with_items:
+        - ""
+        - "PHP Version:"
+        - "------------"
+        - "{{ php_version.stdout }}"
+
+    - name: Write web services status to file
+      lineinfile:
+        path: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
+        line: "{{ item }}"
+      with_items:
+        - ""
+        - "Web Services Status:"
+        - "--------------------"
+        - "{{ web_services.stdout_lines | join('\n') }}"
