@@ -1,0 +1,82 @@
+---
+- name: Check database services, versions, PHP version, and web services
+  hosts: all
+  become: yes
+  tasks:
+    - name: Get server hostname
+      command: uname -n
+      register: server_hostname
+
+    - name: Check for running database services
+      shell: |
+        for db in oracle db2sysc mysqld mariadbd mongod postgres redis-server cassandra; do
+          if pgrep -x $db > /dev/null; then
+            echo "$db is running"
+          else
+            echo "$db is not running"
+          fi
+        done
+      register: db_services
+
+    - name: Get database versions
+      shell: |
+        if pgrep -x oracle > /dev/null; then
+          echo "Oracle DB version: $(sqlplus -v)"
+        elif pgrep -x db2sysc > /dev/null; then
+          echo "DB2 version: $(db2level)"
+        elif pgrep -x mysqld > /dev/null; then
+          echo "MySQL version: $(mysql --version)"
+        elif pgrep -x mariadbd > /dev/null; then
+          echo "MariaDB version: $(mysql --version)"
+        elif pgrep -x mongod > /dev/null; then
+          echo "MongoDB version: $(mongod --version | grep 'db version' | awk '{print $3}')"
+        elif pgrep -x postgres > /dev/null; then
+          echo "PostgreSQL version: $(psql --version)"
+        elif pgrep -x redis-server > /dev/null; then
+          echo "Redis version: $(redis-server --version | awk '{print $3}')"
+        elif pgrep -x cassandra > /dev/null; then
+          echo "Cassandra version: $(cassandra -v)"
+        else
+          echo "No database is running"
+        fi
+      register: db_versions
+
+    - name: Check PHP version
+      shell: |
+        if command -v php > /dev/null 2>&1; then
+          echo "PHP version: $(php -v | grep -oP '^PHP \K[0-9]+\.[0-9]+\.[0-9]+')"
+        else
+          echo "PHP is not installed on this system."
+        fi
+      register: php_version
+
+    - name: Check for running web services
+      shell: |
+        for service in httpd apache2 nginx tomcat lighttpd caddy openresty wildfly jetty glassfish node gunicorn uwsgi; do
+          if pgrep -x $service > /dev/null; then
+            echo "$service is running"
+          else
+            echo "$service is not running"
+          fi
+        done
+      register: web_services
+
+    - name: Save output to file
+      copy:
+        content: |
+          Database Information:
+          ---------------------
+          {{ db_services.stdout_lines | join('\n') }}
+
+          Database Versions:
+          ------------------
+          {{ db_versions.stdout_lines | join('\n') }}
+
+          PHP Version:
+          ------------
+          {{ php_version.stdout }}
+
+          Web Services Status:
+          --------------------
+          {{ web_services.stdout_lines | join('\n') }}
+        dest: "/home/svc_aux/{{ server_hostname.stdout }}.txt"
