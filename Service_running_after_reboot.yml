@@ -38,16 +38,28 @@
         dest: "/home/svc_aux/backup/files/{{ uname_output.stdout }}/running_services_after_reboot.txt"
       delegate_to: 10.1.34.26
 
+    - name: Check if before reboot file exists
+      ansible.builtin.stat:
+        path: "/home/svc_aux/backup/files/{{ uname_output.stdout }}/running_services_before_reboot.txt"
+      register: before_reboot_file
+      delegate_to: 10.1.34.26
+
+    - name: Check if after reboot file exists
+      ansible.builtin.stat:
+        path: "/home/svc_aux/backup/files/{{ uname_output.stdout }}/running_services_after_reboot.txt"
+      register: after_reboot_file
+      delegate_to: 10.1.34.26
+
     - name: Ensure before reboot file exists
       ansible.builtin.fail:
         msg: "The file running_services_before_reboot.txt does not exist."
-      when: before_reboot_file.stat.exists == false
+      when: not before_reboot_file.stat.exists
       delegate_to: 10.1.34.26
 
     - name: Ensure after reboot file exists
       ansible.builtin.fail:
         msg: "The file running_services_after_reboot.txt does not exist."
-      when: after_reboot_file.stat.exists == false
+      when: not after_reboot_file.stat.exists
       delegate_to: 10.1.34.26
 
     - name: Compare services and save the result
