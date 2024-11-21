@@ -25,7 +25,7 @@
       delegate_to: 10.1.34.26
 
     - name: Collect running services after reboot
-      ansible.builtin.shell: systemctl list-units --type=service --state=running
+      ansible.builtin.shell: systemctl list-units --type=service --state=running | awk '{print $1}'
       register: running_services_after_reboot
 
     - name: Save running services after reboot to a file on remote server
@@ -47,8 +47,7 @@
       delegate_to: 10.1.34.26
 
     - name: Compare services if both files exist
-      ansible.builtin.command:
-        cmd: diff /home/svc_aux/backup/files/{{ ansible_hostname }}/running_services_before_reboot.txt /home/svc_aux/backup/files/{{ ansible_hostname }}/running_services_after_reboot.txt
+      ansible.builtin.shell: grep -Fxv -f /home/svc_aux/backup/files/{{ ansible_hostname }}/running_services_after_reboot.txt /home/svc_aux/backup/files/{{ ansible_hostname }}/running_services_before_reboot.txt
       register: diff_output
       when: before_reboot_file.stat.exists and after_reboot_file.stat.exists
       ignore_errors: yes
