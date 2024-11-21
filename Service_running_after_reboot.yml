@@ -52,8 +52,13 @@
       when: before_reboot_file.stat.exists and after_reboot_file.stat.exists
       ignore_errors: yes
 
+    - name: Determine comparison result
+      set_fact:
+        comparison_result: "{{ diff_output.stdout if diff_output.stdout else 'All services that were running before the reboot are still running after the reboot.' }}"
+      when: before_reboot_file.stat.exists and after_reboot_file.stat.exists
+
     - name: Save comparison result to a file on remote server
       ansible.builtin.copy:
-        content: "{{ diff_output.stdout if diff_output is defined else 'No comparison data available' }}"
+        content: "{{ comparison_result }}"
         dest: "/home/svc_aux/backup/files/{{ ansible_hostname }}/comparison_result.txt"
       delegate_to: 10.1.34.26
