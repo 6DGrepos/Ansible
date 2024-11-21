@@ -22,12 +22,26 @@
         dest: "/home/svc_aux/backup/files/{{ ansible_hostname }}/running_services_after_reboot.txt"
       delegate_to: 10.1.34.26
 
-    - name: Compare services
+    - name: Check if before reboot file exists
+      ansible.builtin.stat:
+        path: "/home/svc_aux/backup/files/{{ ansible_hostname }}/running_services_before_reboot.txt"
+      register: before_reboot_file
+      delegate_to: 10.1.34.26
+
+    - name: Check if after reboot file exists
+      ansible.builtin.stat:
+        path: "/home/svc_aux/backup/files/{{ ansible_hostname }}/running_services_after_reboot.txt"
+      register: after_reboot_file
+      delegate_to: 10.1.34.26
+
+    - name: Compare services if both files exist
       ansible.builtin.shell: diff /home/svc_aux/backup/files/{{ ansible_hostname }}/running_services_before_reboot.txt /home/svc_aux/backup/files/{{ ansible_hostname }}/running_services_after_reboot.txt
       register: diff_output
+      when: before_reboot_file.stat.exists and after_reboot_file.stat.exists
+      ignore_errors: yes
 
     - name: Save comparison result to a file on remote server
       ansible.builtin.copy:
-        content: "{{ diff_output.stdout }}"
+        content: "{{ diff_output.stdout if diff_output is defined else 'No comparison data available' }}"
         dest: "/home/svc_aux/backup/files/{{ ansible_hostname }}/comparison_result.txt"
       delegate_to: 10.1.34.26
