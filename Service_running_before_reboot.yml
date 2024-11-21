@@ -6,15 +6,19 @@
       ansible.builtin.setup:
         gather_subset: all
 
+    - name: Get the hostname using uname -n
+      ansible.builtin.command: uname -n
+      register: uname_output
+
     - name: Create directory on remote server
       ansible.builtin.file:
-        path: "/home/svc_aux/backup/files/{{ ansible_hostname }}"
+        path: "/home/svc_aux/backup/files/{{ uname_output.stdout }}"
         state: directory
       delegate_to: 10.1.34.26
 
     - name: Clear previous data before reboot
       ansible.builtin.file:
-        path: "/home/svc_aux/backup/files/{{ ansible_hostname }}/running_services_before_reboot.txt"
+        path: "/home/svc_aux/backup/files/{{ uname_output.stdout }}/running_services_before_reboot.txt"
         state: absent
       delegate_to: 10.1.34.26
 
@@ -25,5 +29,5 @@
     - name: Save running services to a file on remote server
       ansible.builtin.copy:
         content: "{{ running_services.stdout }}"
-        dest: "/home/svc_aux/backup/files/{{ ansible_hostname }}/running_services_before_reboot.txt"
+        dest: "/home/svc_aux/backup/files/{{ uname_output.stdout }}/running_services_before_reboot.txt"
       delegate_to: 10.1.34.26
