@@ -19,7 +19,7 @@
       delegate_to: 10.1.34.26
 
     - name: Collect running services
-      ansible.builtin.shell: systemctl list-units --type=service --state=running
+      ansible.builtin.shell: systemctl list-units --type=service --state=running | awk '{print $1}'
       register: running_services
 
     - name: Save running services to a file on remote server
