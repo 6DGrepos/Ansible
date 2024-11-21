@@ -1,0 +1,21 @@
+---
+- name: Collect currently running servers and services
+  hosts: all
+  tasks:
+    - name: Gather facts
+      ansible.builtin.setup:
+        gather_subset: all
+
+    - name: Collect running services
+      ansible.builtin.shell: systemctl list-units --type=service --state=running
+      register: running_services
+
+    - name: Create directory on remote server
+      ansible.builtin.shell: mkdir -p /home/svc_aux/backup/files/$(uname -n)
+      delegate_to: 10.1.34.26
+
+    - name: Save running services to a file on remote server
+      ansible.builtin.copy:
+        content: "{{ running_services.stdout }}"
+        dest: "/home/svc_aux/backup/files/{{ ansible_hostname }}/running_services_before_reboot.txt"
+      delegate_to: 10.1.34.26
