@@ -38,35 +38,25 @@
         dest: "/home/svc_aux/backup/files/{{ uname_output.stdout }}/running_services_after_reboot.txt"
       delegate_to: 10.1.34.26
 
-    - name: Check if before reboot file exists
-      ansible.builtin.stat:
-        path: "/home/svc_aux/backup/files/{{ uname_output.stdout }}/running_services_before_reboot.txt"
-      register: before_reboot_file
+    - name: Ensure before reboot file exists
+      ansible.builtin.fail:
+        msg: "The file running_services_before_reboot.txt does not exist."
+      when: before_reboot_file.stat.exists == false
       delegate_to: 10.1.34.26
 
-    - name: Check if after reboot file exists
-      ansible.builtin.stat:
-        path: "/home/svc_aux/backup/files/{{ uname_output.stdout }}/running_services_after_reboot.txt"
-      register: after_reboot_file
+    - name: Ensure after reboot file exists
+      ansible.builtin.fail:
+        msg: "The file running_services_after_reboot.txt does not exist."
+      when: after_reboot_file.stat.exists == false
       delegate_to: 10.1.34.26
 
-    - name: Compare services if both files exist
+    - name: Compare services and save the result
       ansible.builtin.shell: |
-        if [ -f /home/svc_aux/backup/files/{{ uname_output.stdout }}/running_services_before_reboot.txt ] && [ -f /home/svc_aux/backup/files/{{ uname_output.stdout }}/running_services_after_reboot.txt ]; then
-          diff_output=$(grep -Fxv -f /home/svc_aux/backup/files/{{ uname_output.stdout }}/running_services_after_reboot.txt /home/svc_aux/backup/files/{{ uname_output.stdout }}/running_services_before_reboot.txt)
-          if [ -z "$diff_output" ]; then
-            echo "All services that were running before the reboot are still running after the reboot."
-          else
-            echo "$diff_output"
-          fi
+        diff_output=$(comm -23 <(sort /home/svc_aux/backup/files/{{ uname_output.stdout }}/running_services_before_reboot.txt) <(sort /home/svc_aux/backup/files/{{ uname_output.stdout }}/running_services_after_reboot.txt))
+        if [ -z "$diff_output" ]; then
+          echo "All services that were running before the reboot are still running after the reboot." > /home/svc_aux/backup/files/{{ uname_output.stdout }}/comparison_result.txt
         else
-          echo "One or both of the files do not exist."
+          echo "Services not running after reboot:" > /home/svc_aux/backup/files/{{ uname_output.stdout }}/comparison_result.txt
+          echo "$diff_output" >> /home/svc_aux/backup/files/{{ uname_output.stdout }}/comparison_result.txt
         fi
-      register: diff_output
-      ignore_errors: yes
-
-    - name: Save comparison result to a file on remote server
-      ansible.builtin.copy:
-        content: "{{ diff_output.stdout }}"
-        dest: "/home/svc_aux/backup/files/{{ uname_output.stdout }}/comparison_result.txt"
       delegate_to: 10.1.34.26
