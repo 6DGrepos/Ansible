@@ -1,23 +1,21 @@
 ---
-- name: Gather system information
+- name: Gather system information and create consolidated CSV
   hosts: all
   gather_facts: yes
   tasks:
     - name: Gather server information
       ansible.builtin.set_fact:
-        server_info: |
-          {{ ansible_hostname }},{{ ansible_default_ipv4.address }},{{ ansible_distribution }} {{ ansible_distribution_version }}
-      delegate_to: localhost
-      run_once: true
+        server_info: "{{ ansible_hostname }},{{ ansible_default_ipv4.address }},{{ ansible_distribution }} {{ ansible_distribution_version }}"
 
-    - name: Append server information to a temporary file
+    - name: Append server information to the consolidated CSV
       ansible.builtin.lineinfile:
         path: /tmp/all_server_info.csv
         line: "{{ server_info }}"
         create: yes
-        state: present
+      delegate_to: localhost
+      run_once: false
 
-- name: Consolidate CSV on central server
+- name: Copy consolidated CSV to central server
   hosts: 10.1.34.26
   become: yes
   become_method: sudo
@@ -33,15 +31,23 @@
         owner: svc_aux
         group: svc_aux
 
-    - name: Copy gathered server information to the central CSV
+    - name: Copy consolidated server information to central server
       ansible.builtin.copy:
         src: /tmp/all_server_info.csv
         dest: /home/svc_aux/backup/All_Servers_information/All_server_information.csv
-        remote_src: no
         owner: svc_aux
         group: svc_aux
         mode: '0644'
 
     - name: Add header to the CSV file
       ansible.builtin.lineinfile:
-        path: /home/svc_aux/backup/
+        path: /home/svc_aux/backup/All_Servers_information/All_server_information.csv
+        line: "Hostname,IP Address,OS Version"
+        insertbefore: BOF
+        create: yes
+
+    - name: Clean up temporary files on the Controller
+      ansible.builtin.file:
+        path: /tmp/all_server_info.csv
+        state: absent
+      delegate_to: localhost
