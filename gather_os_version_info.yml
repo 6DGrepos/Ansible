@@ -7,7 +7,7 @@
       ansible.builtin.set_fact:
         server_info: "{{ ansible_hostname }},{{ ansible_default_ipv4.address }},{{ ansible_distribution }} {{ ansible_distribution_version }}"
 
-    - name: Append server information to the consolidated CSV
+    - name: Append server information to the temporary consolidated CSV
       ansible.builtin.lineinfile:
         path: /tmp/all_server_info.csv
         line: "{{ server_info }}"
@@ -36,6 +36,18 @@
         path: /home/svc_aux/backup/All_Servers_information/All_server_information.csv
         state: absent
 
+    - name: Create a new empty CSV file
+      ansible.builtin.command:
+        cmd: "touch /home/svc_aux/backup/All_Servers_information/All_server_information.csv"
+      args:
+        creates: /home/svc_aux/backup/All_Servers_information/All_server_information.csv
+
+    - name: Add header to the new CSV file
+      ansible.builtin.lineinfile:
+        path: /home/svc_aux/backup/All_Servers_information/All_server_information.csv
+        line: "Hostname,IP Address,OS Version"
+        create: yes
+
     - name: Copy consolidated server information to central server
       ansible.builtin.copy:
         src: /tmp/all_server_info.csv
@@ -43,13 +55,7 @@
         owner: svc_aux
         group: svc_aux
         mode: '0644'
-
-    - name: Add header to the CSV file
-      ansible.builtin.lineinfile:
-        path: /home/svc_aux/backup/All_Servers_information/All_server_information.csv
-        line: "Hostname,IP Address,OS Version"
-        insertbefore: BOF
-        create: yes
+        remote_src: no
 
     - name: Clean up temporary file on the Controller
       ansible.builtin.file:
