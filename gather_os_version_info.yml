@@ -31,6 +31,11 @@
         owner: svc_aux
         group: svc_aux
 
+    - name: Remove old CSV file if it exists
+      ansible.builtin.file:
+        path: /home/svc_aux/backup/All_Servers_information/All_server_information.csv
+        state: absent
+
     - name: Copy consolidated server information to central server
       ansible.builtin.copy:
         src: /tmp/all_server_info.csv
@@ -46,7 +51,7 @@
         insertbefore: BOF
         create: yes
 
-    - name: Clean up temporary files on the Controller
+    - name: Clean up temporary file on the Controller
       ansible.builtin.file:
         path: /tmp/all_server_info.csv
         state: absent
