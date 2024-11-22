@@ -3,7 +3,6 @@
   hosts: all
   gather_facts: yes
   tasks:
-
     - name: Get IP address
       ansible.builtin.set_fact:
         ip_address: "{{ ansible_default_ipv4.address }}"
@@ -33,7 +32,6 @@
   vars:
     ansible_become_pass: just44now
   tasks:
-
     - name: Ensure directory exists
       ansible.builtin.file:
         path: /home/svc_aux/backup/All_Servers_information
@@ -54,5 +52,5 @@
       ansible.builtin.lineinfile:
         path: "/home/svc_aux/backup/All_Servers_information/All_server_information.csv"
         line: "{{ hostvars[item]['csv_data'] }}"
-      loop: "{{ groups['all'] }}"
+      loop: "{{ play_hosts }}"
       when: hostvars[item]['csv_data'] is defined
