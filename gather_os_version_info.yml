@@ -38,15 +38,15 @@
       ansible.builtin.file:
         path: /home/svc_aux/backup/All_Servers_information
         state: directory
-        mode: '0755'
-        owner: svc_aux
-        group: svc_aux
+        mode: '0775'
+        owner: root
+        group: root
 
     - name: Create or truncate CSV file with header
       ansible.builtin.copy:
         content: "Hostname,IP Address,OS Version\n"
         dest: "/home/svc_aux/backup/All_Servers_information/All_server_information.csv"
-        mode: '0644'
+        mode: '0664'
         owner: svc_aux
         group: svc_aux
 
