@@ -28,7 +28,8 @@
 - name: Update central CSV file
   hosts: 10.1.34.26
   become: yes
-  become_user: svc_aux
+  become_method: sudo
+  become_user: root
   vars:
     ansible_become_pass: just44now
   tasks:
@@ -38,12 +39,16 @@
         path: /home/svc_aux/backup/All_Servers_information
         state: directory
         mode: '0755'
+        owner: svc_aux
+        group: svc_aux
 
     - name: Create or truncate CSV file with header
       ansible.builtin.copy:
         content: "Hostname,IP Address,OS Version\n"
         dest: "/home/svc_aux/backup/All_Servers_information/All_server_information.csv"
         mode: '0644'
+        owner: svc_aux
+        group: svc_aux
 
     - name: Append gathered information to CSV file
       ansible.builtin.lineinfile:
