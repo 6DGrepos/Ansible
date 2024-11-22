@@ -52,5 +52,5 @@
       ansible.builtin.lineinfile:
         path: "/home/svc_aux/backup/All_Servers_information/All_server_information.csv"
         line: "{{ hostvars[item]['csv_data'] }}"
-      loop: "{{ play_hosts }}"
+      loop: "{{ groups['all'] }}"
       when: hostvars[item]['csv_data'] is defined
