@@ -81,7 +81,7 @@
 
     - name: Format data for CSV
       ansible.builtin.set_fact:
-        csv_data: "{{ hostname }},{{ ip_address }},{{ os_version }},{{ db_services.stdout | default('No database is running') }},{{ db_versions.stdout | default('No database version found') }},{{ php_version.stdout | default('PHP is not installed') }},{{ web_services_status }},{{ running_services.stdout | default('No running services found') }}"
+        csv_data: "{{ hostname }},{{ ip_address }},{{ os_version }},{{ db_services.stdout | default('No database is running') }},{{ db_versions.stdout | default('No database version found') }},{{ php_version.stdout | default('PHP is not installed') }},{{ web_services_status }},\"{{ running_services.stdout | default('No running services found') }}\""
 
     - name: Create or clear output file
       copy:
