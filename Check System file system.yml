@@ -8,10 +8,14 @@
       shell: df -h --output=target,pcent | tail -n +2
       register: disk_usage_all
 
+    - name: Get the hostname (uname -n)
+      command: uname -n
+      register: system_hostname
+
     - name: Analyze disk usage and generate a report
       set_fact:
         disk_report: |
-          HOSTNAME: {{ inventory_hostname }}
+          HOSTNAME: {{ inventory_hostname }} ({{ ansible_host }} - {{ system_hostname.stdout }})
           {% set critical_filesystems = [] %}
           {% for line in disk_usage_all.stdout_lines %}
             {% set mount, usage = line.split() %}
