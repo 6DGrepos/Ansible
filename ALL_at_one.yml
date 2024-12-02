@@ -1,5 +1,5 @@
 ---
-- name: Gather system information and update central server
+- name: Gather system information and services
   hosts: all
   gather_facts: yes
   tasks:
@@ -24,13 +24,11 @@
       ansible.builtin.set_fact:
         csv_data: "{{ hostname }},{{ ip_address }},{{ os_version }}"
 
-    - name: Check database services, versions, PHP version, and web services
+    - name: Check for running database services
       shell: |
         for db in oracle db2sysc mysqld mariadbd mongod postgres redis-server cassandra; do
           if pgrep -x $db > /dev/null; then
             echo "$db is running"
-          else
-            echo "$db is not running"
           fi
         done
       register: db_services
@@ -72,56 +70,36 @@
         for service in httpd apache2 nginx tomcat lighttpd caddy openresty wildfly jetty glassfish node gunicorn uwsgi; do
           if pgrep -x $service > /dev/null; then
             echo "$service is running"
-          else
-            echo "$service is not running"
           fi
         done
       register: web_services
 
-    - name: Create or clear output file
-      copy:
-        content: ""
-        dest: "/home/svc_aux/{{ hostname }}.txt"
+    - name: Create output file with gathered information
+      ansible.builtin.copy:
+        content: |
+          Database Information:
+          ----------------------
+          {{ db_services.stdout }}
 
-    - name: Write database information to file
-      lineinfile:
-        path: "/home/svc_aux/{{ hostname }}.txt"
-        line: "{{ item }}"
-      with_items:
-        - "Database Information:"
-        - "---------------------"
-        - "{{ db_services.stdout_lines | join('\n') }}"
+          Database Versions:
+          ------------------
+          {{ db_versions.stdout }}
 
-    - name: Write database versions to file
-      lineinfile:
-        path: "/home/svc_aux/{{ hostname }}.txt"
-        line: "{{ item }}"
-      with_items:
-        - ""
-        - "Database Versions:"
-        - "------------------"
-        - "{{ db_versions.stdout_lines | join('\n') }}"
+          PHP Version:
+          ------------
+          {{ php_version.stdout }}
 
-    - name: Write PHP version to file
-      lineinfile:
-        path: "/home/svc_aux/{{ hostname }}.txt"
-        line: "{{ item }}"
-      with_items:
-        - ""
-        - "PHP Version:"
-        - "------------"
-        - "{{ php_version.stdout }}"
+          Web Services Status:
+          --------------------
+          {{ web_services.stdout }}
+        dest: "/home/svc_aux/{{ inventory_hostname }}.txt"
 
-    - name: Write web services status to file
-      lineinfile:
-        path: "/home/svc_aux/{{ hostname }}.txt"
-        line: "{{ item }}"
-      with_items:
-        - ""
-        - "Web Services Status:"
-        - "--------------------"
-        - "{{ web_services.stdout_lines | join('\n') }}"
-
+- name: Update central server with gathered information
+  hosts: 10.1.34.26
+  gather_facts: yes
+  become: yes
+  become_user: root
+  tasks:
     - name: Ensure directory exists on central server
       ansible.builtin.file:
         path: /home/svc_aux/backup/All_Servers_information
@@ -129,36 +107,30 @@
         mode: '0775'
         owner: root
         group: root
-      delegate_to: 10.1.34.26
 
     - name: Create or truncate CSV file with header
       ansible.builtin.copy:
-        content: "Hostname,IP Address,OS Version\n"
+        content: "Hostname,IP Address,OS Version,Database Information,Database Version,PHP Version,Web Services\n"
         dest: "/home/svc_aux/backup/All_Servers_information/All_server_information.csv"
         mode: '0664'
         owner: svc_aux
         group: svc_aux
-      delegate_to: 10.1.34.26
 
-    - name: Append gathered information to CSV file on central server
-      ansible.builtin.lineinfile:
-        path: "/home/svc_aux/backup/All_Servers_information/All_server_information.csv"
-        line: "{{ hostvars[item]['csv_data'] }}"
-      loop: "{{ groups['all'] }}"
-      when: hostvars[item]['csv_data'] is defined
-      delegate_to: 10.1.34.26
+    - name: Check if output file exists on remote server
+      ansible.builtin.stat:
+        path: "/home/svc_aux/{{ inventory_hostname }}.txt"
+      register: file_stat
 
-- name: Fetch output files to central server
-  hosts: all
-  tasks:
-    - name: Fetch output file from remote server
+    - name: Fetch output file from remote server if exists
       ansible.builtin.fetch:
         src: "/home/svc_aux/{{ inventory_hostname }}.txt"
         dest: "/tmp/"
         flat: yes
+      when: file_stat.stat.exists
 
-    - name: Copy output file to central server
-      ansible.builtin.copy:
-        src: "/tmp/{{ inventory_hostname }}.txt"
-        dest: "/home/svc_aux/backup/services_details/{{ inventory_hostname }}.txt"
-      delegate_to: 10.1.34.26
+    - name: Append gathered information to central CSV file
+      ansible.builtin.lineinfile:
+        path: "/home/svc_aux/backup/All_Servers_information/All_server_information.csv"
+        line: "{{ hostvars[inventory_hostname]['csv_data'] }}"
+      loop: "{{ groups['all'] }}"
+      when: hostvars[inventory_hostname]['csv_data'] is defined
