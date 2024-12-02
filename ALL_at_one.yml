@@ -71,9 +71,17 @@
         done
       register: web_services
 
+    - name: Set web services status if none are running
+      set_fact:
+        web_services_status: "{{ web_services.stdout if web_services.stdout else 'No web services are running' }}"
+
+    - name: Collect all running services
+      shell: systemctl list-units --type=service --state=running | awk 'NR>1 && $1 !~ /^(LOAD|ACTIVE|SUB)$/ {print $1}' | awk 'NF > 0'
+      register: running_services
+
     - name: Format data for CSV
       ansible.builtin.set_fact:
-        csv_data: "{{ hostname }},{{ ip_address }},{{ os_version }},{{ db_services.stdout | default('No database is running') }},{{ db_versions.stdout | default('No database version found') }},{{ php_version.stdout | default('PHP is not installed') }},{{ web_services.stdout | default('No web service is running') }}"
+        csv_data: "{{ hostname }},{{ ip_address }},{{ os_version }},{{ db_services.stdout | default('No database is running') }},{{ db_versions.stdout | default('No database version found') }},{{ php_version.stdout | default('PHP is not installed') }},{{ web_services_status }}"
 
     - name: Create or clear output file
       copy:
@@ -117,7 +125,17 @@
         - ""
         - "Web Services Status:"
         - "--------------------"
-        - "{{ web_services.stdout_lines | join('\n') | default('No web service is running') }}"
+        - "{{ web_services_status }}"
+
+    - name: Write running services to file
+      lineinfile:
+        path: "/home/svc_aux/{{ hostname }}.txt"
+        line: "{{ item }}"
+      with_items:
+        - ""
+        - "Running Services:"
+        - "----------------"
+        - "{{ running_services.stdout_lines | join('\n') }}"
 
 - name: Update central CSV file
   hosts: 10.1.34.26
