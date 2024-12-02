@@ -4,12 +4,27 @@
   become: yes
 
   tasks:
+    # Wait for any other apt operations to finish (if a lock exists)
+    - name: Wait for apt lock to be released (if it exists)
+      become: true
+      shell: |
+        while fuser /var/lib/dpkg/lock* /var/cache/apt/archives/lock /var/lib/apt/lists/lock; do
+          echo "Waiting for apt lock to be released...";
+          sleep 5;
+        done
+      ignore_errors: true
+
     # Upgrade apt packages
     - name: Upgrade apt packages
       become: true
       apt:
         upgrade: yes
         update_cache: yes
+        cache_valid_time: 3600  # Ensure cache is valid for 1 hour
+      retries: 3
+      delay: 10
+      register: upgrade_result
+      until: upgrade_result is success
 
     # Check if reboot is required
     - name: Check if system reboot is required
