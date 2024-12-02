@@ -1,0 +1,30 @@
+---
+- hosts: "{{ hosts }}"  # You can specify your inventory group here
+  become: yes
+
+  tasks:
+    # Upgrade apt packages
+    - name: Upgrade apt packages
+      become: true
+      apt:
+        upgrade: yes
+        update_cache: yes
+
+    # Check if reboot is required
+    - name: Check if system reboot is required
+      become: true
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    # Send Discord message if reboot is required
+    - name: Send Discord message if reboot required
+      uri:
+        url: "{{ discord_webhook_url }}"
+        method: POST
+        body_format: json
+        body: '{"content": "Reboot required on {{ inventory_hostname }}"}'
+        headers:
+          Content-Type: application/json
+        status_code: 204
+      when: reboot_required.stat.exists
