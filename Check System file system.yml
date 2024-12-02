@@ -1,5 +1,5 @@
 ---
-- name: Check disk usage and generate report
+- name: Check disk usage and generate a consolidated report
   hosts: "{{ hosts | default('all') }}"
   gather_facts: no
   tasks:
@@ -30,25 +30,30 @@
           All file systems are good
           {% endif %}
 
-    - name: Save disk report to file
-      copy:
-        content: "{{ disk_report }}"
+    - name: Save disk report to temporary file on the AWX controller
+      local_action:
+        module: copy
+        content: "{{ disk_report }}\n\n===============================================\n\n"
         dest: /tmp/disk_usage_{{ inventory_hostname }}.txt
 
-    - name: Fetch the report file from remote hosts to the AWX controller
-      fetch:
-        src: /tmp/disk_usage_{{ inventory_hostname }}.txt
-        dest: /tmp/
-        flat: yes
+    - name: Consolidate all reports into a single file on the AWX controller
+      run_once: true
+      delegate_to: localhost
+      shell: |
+        > /tmp/Disk_usage
+        for file in /tmp/disk_usage_*.txt; do
+          cat "$file" >> /tmp/Disk_usage
+        done
 
-    - name: Transfer the report from AWX controller to the remote server
+    - name: Transfer consolidated report to the remote server
+      run_once: true
       copy:
-        src: /tmp/disk_usage_{{ inventory_hostname }}.txt
-        dest: /home/svc_aux/backup/Diskspace/disk_usage_{{ inventory_hostname }}.txt
+        src: /tmp/Disk_usage
+        dest: /home/svc_aux/backup/Diskspace/Disk_usage
         remote_src: no
       delegate_to: 10.1.34.26
 
-    - name: Clean up temporary report file on the remote host
-      file:
-        path: /tmp/disk_usage_{{ inventory_hostname }}.txt
-        state: absent
+    - name: Clean up temporary files on the AWX controller
+      run_once: true
+      delegate_to: localhost
+      shell: rm -f /tmp/disk_usage_*.txt /tmp/Disk_usage
