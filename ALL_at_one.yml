@@ -53,5 +53,5 @@
       copy:
         content: |
           Hostname,IP Address,OS Version,Database Information,Database Version,PHP Version,Web Services,Web Services Version,Running Services
-          {{ hostname_output.stdout }},{{ ip_output.stdout }},{{ os_version_output.stdout }},MySQL,{{ mysql_version_output.stdout }},{{ php_version_output.stdout }},Apache,{{ apache_version_output.stdout }},{{ running_services_output.stdout }}
+          {{ hostname_output.stdout | default('N/A') }},{{ ip_output.stdout | default('N/A') }},{{ os_version_output.stdout | default('N/A') }},MySQL,{{ mysql_version_output.stdout | default('N/A') }},{{ php_version_output.stdout | default('N/A') }},Apache,{{ apache_version_output.stdout | default('N/A') }},{{ running_services_output.stdout | default('N/A') }}
         dest: /home/svc_aux/backup/all_server_information.csv
