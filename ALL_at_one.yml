@@ -3,6 +3,12 @@
   hosts: all
   become: yes
   tasks:
+    - name: Ensure backup directory exists
+      file:
+        path: /home/svc_aux/backup
+        state: directory
+        mode: '0755'
+
     - name: Gather Hostname
       command: hostname
       register: hostname_output
@@ -19,34 +25,70 @@
       command: service --status-all
       register: running_services_output
 
+    - name: Check if MySQL is installed
+      command: which mysql
+      register: mysql_check
+      ignore_errors: yes
+
     - name: Gather MySQL Version
       command: mysql --version
       register: mysql_version_output
+      when: mysql_check.rc == 0
+      ignore_errors: yes
+
+    - name: Check if Oracle DB is installed
+      command: which sqlplus
+      register: oracle_check
       ignore_errors: yes
 
     - name: Gather Oracle DB Version
       command: sqlplus -v
       register: oracle_version_output
+      when: oracle_check.rc == 0
+      ignore_errors: yes
+
+    - name: Check if PHP is installed
+      command: which php
+      register: php_check
       ignore_errors: yes
 
     - name: Gather PHP Version
       command: php --version
       register: php_version_output
+      when: php_check.rc == 0
+      ignore_errors: yes
+
+    - name: Check if Apache is installed
+      command: which apache2
+      register: apache_check
       ignore_errors: yes
 
     - name: Gather Apache Version
       command: apache2 -v
       register: apache_version_output
+      when: apache_check.rc == 0
+      ignore_errors: yes
+
+    - name: Check if Tomcat is installed
+      command: which tomcat
+      register: tomcat_check
       ignore_errors: yes
 
     - name: Gather Tomcat Version
       command: tomcat -v
       register: tomcat_version_output
+      when: tomcat_check.rc == 0
+      ignore_errors: yes
+
+    - name: Check if Nginx is installed
+      command: which nginx
+      register: nginx_check
       ignore_errors: yes
 
     - name: Gather Nginx Version
       command: nginx -v
       register: nginx_version_output
+      when: nginx_check.rc == 0
       ignore_errors: yes
 
     - name: Create CSV file with server information
