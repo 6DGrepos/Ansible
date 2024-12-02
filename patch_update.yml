@@ -14,16 +14,16 @@
         done
       ignore_errors: true
 
-    # Upgrade apt packages
+    # Upgrade apt packages and capture the list of updated packages
     - name: Upgrade apt packages
       become: true
       apt:
         upgrade: yes
         update_cache: yes
         cache_valid_time: 3600  # Ensure cache is valid for 1 hour
+      register: upgrade_result
       retries: 3
       delay: 10
-      register: upgrade_result
       until: upgrade_result is success
 
     # Check if reboot is required
@@ -33,14 +33,33 @@
         path: /var/run/reboot-required
       register: reboot_required
 
-    # Send Discord message if reboot is required
-    - name: Send Discord message if reboot required
-      uri:
-        url: "{{ discord_webhook_url }}"  # Define this variable in your AWX Inventory or Job Template
-        method: POST
-        body_format: json
-        body: '{"content": "Reboot required on {{ inventory_hostname }}"}'
-        headers:
-          Content-Type: application/json
-        status_code: 204
+    # Save the updated package list to a file on 10.1.34.26
+    - name: Get the list of upgraded packages
+      become: true
+      shell: |
+        dpkg --get-selections | grep -i "install" > /tmp/updated_packages_list.txt
+      register: updated_packages
+      when: inventory_hostname == '10.1.34.26'
+
+    # Copy the updated package list to the destination folder
+    - name: Copy the updated package list to /home/svc_aux/backup/patchstatus/
+      become: true
+      copy:
+        src: /tmp/updated_packages_list.txt
+        dest: /home/svc_aux/backup/patchstatus/updated_packages_{{ inventory_hostname }}_{{ ansible_date_time.iso8601 }}.txt
+        mode: '0644'
+      when: inventory_hostname == '10.1.34.26'
+
+    # Clean up the temporary file after copying it
+    - name: Remove temporary updated packages list file
+      become: true
+      file:
+        path: /tmp/updated_packages_list.txt
+        state: absent
+      when: inventory_hostname == '10.1.34.26'
+
+    # Send a message indicating a reboot is required (optional, since Discord is removed)
+    - name: Indicate reboot requirement
+      debug:
+        msg: "Reboot required on {{ inventory_hostname }}"
       when: reboot_required.stat.exists
