@@ -1,0 +1,45 @@
+- hosts: "{{ hosts }}"
+  tasks:
+
+    # Check disk usage for all filesystems
+    - name: Get disk usage for all filesystems
+      shell: df -h --output=target,pcent
+      register: disk_usage_all
+
+    # Parse and check if any filesystem usage is over 80%
+    - name: Find filesystems with disk usage over 80%
+      set_fact:
+        high_usage_filesystems: "{{ disk_usage_all.stdout_lines[1:] | map('extract_usage') | select('>=', 80) | list }}"
+
+    # Send Discord message if any filesystem usage exceeds 80%
+    - name: Send Discord message if high usage found
+      uri:
+        url: "{{ discord_webhook_url }}"
+        method: POST
+        body_format: json
+        body: >
+          {
+            "content": "The following filesystems on {{ inventory_hostname }} are above 80% usage:\n
+            {% for fs, usage in high_usage_filesystems %}
+            - {{ fs }}: {{ usage }}%\n
+            {% endfor %}"
+          }
+        headers:
+          Content-Type: application/json
+        status_code: 204
+      when: high_usage_filesystems | length > 0
+
+  vars:
+
+    # Custom Jinja2 filter to parse disk usage
+    extract_usage:
+      type: filter
+      filters:
+        extract_usage: "disk_usage_all | extract_fs_and_percent"
+
+    # Custom Python function to parse disk usage
+    extract_fs_and_percent:
+      type: function
+      function:
+        extract_fs_and_percent:
+          data: "{{ ansible_disk_output.stdout }}"
