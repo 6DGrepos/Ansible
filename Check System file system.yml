@@ -4,7 +4,7 @@
   gather_facts: no
   tasks:
 
-    - name: Get disk usage for all filesystems
+    - name: Get disk usage for all filesystems (excluding headers)
       shell: df -h --output=target,pcent | tail -n +2
       register: disk_usage_all
 
@@ -20,7 +20,7 @@
           {% for line in disk_usage_all.stdout_lines %}
             {% set mount, usage = line.split() %}
             {% set usage_percent = usage[:-1] | int %}
-            {% if usage_percent > 80 %}
+            {% if usage_percent > 80 and not (mount.startswith('/var/lib/docker') or mount.startswith('/snap')) %}
               {{ critical_filesystems.append(mount) }}
             {% endif %}
           {% endfor %}
