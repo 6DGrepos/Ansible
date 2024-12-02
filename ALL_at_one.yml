@@ -30,6 +30,10 @@
         done
       register: db_services
 
+    - name: Set database services status if none are running
+      set_fact:
+        db_services_status: "{{ db_services.stdout if db_services.stdout else 'No database is running on this server' }}"
+
     - name: Get database versions
       shell: |
         if pgrep -x oracle > /dev/null; then
@@ -49,7 +53,7 @@
         elif pgrep -x cassandra > /dev/null; then
           echo "Cassandra version: $(cassandra -v)"
         else
-          echo "No database is running"
+          echo "No database version found"
         fi
       register: db_versions
 
@@ -81,7 +85,7 @@
 
     - name: Format data for CSV
       ansible.builtin.set_fact:
-        csv_data: "{{ hostname }},{{ ip_address }},{{ os_version }},{{ db_services.stdout | default('No database is running') }},{{ db_versions.stdout | default('No database version found') }},{{ php_version.stdout | default('PHP is not installed') }},{{ web_services_status }},\"{{ running_services.stdout | default('No running services found') }}\""
+        csv_data: "{{ hostname }},{{ ip_address }},{{ os_version }},{{ db_services_status }},{{ db_versions.stdout | default('No database version found') }},{{ php_version.stdout | default('PHP is not installed') }},{{ web_services_status }},\"{{ running_services.stdout | default('No running services found') }}\""
 
     - name: Create or clear output file
       copy:
@@ -95,7 +99,7 @@
       with_items:
         - "Database Information:"
         - "---------------------"
-        - "{{ db_services.stdout_lines | join('\n') | default('No database is running') }}"
+        - "{{ db_services_status }}"
 
     - name: Write database versions to file
       lineinfile:
