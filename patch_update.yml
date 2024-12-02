@@ -1,5 +1,6 @@
 ---
-- hosts: "{{ hosts }}"  # You can specify your inventory group here
+- name: Patch update and reboot check
+  hosts: all  # Use 'all' or any specific group you defined in your AWX Inventory
   become: yes
 
   tasks:
@@ -20,7 +21,7 @@
     # Send Discord message if reboot is required
     - name: Send Discord message if reboot required
       uri:
-        url: "{{ discord_webhook_url }}"
+        url: "{{ discord_webhook_url }}"  # Define this variable in your AWX Inventory or Job Template
         method: POST
         body_format: json
         body: '{"content": "Reboot required on {{ inventory_hostname }}"}'
