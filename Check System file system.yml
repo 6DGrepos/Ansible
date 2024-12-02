@@ -15,7 +15,7 @@
     - name: Analyze disk usage and generate a report
       set_fact:
         disk_report: |
-          HOSTNAME: {{ inventory_hostname }} ({{ ansible_host }} - {{ system_hostname.stdout }})
+          **HOSTNAME: {{ inventory_hostname.upper() }} ({{ ansible_host }} - {{ system_hostname.stdout }})**
           {% set critical_filesystems = [] %}
           {% for line in disk_usage_all.stdout_lines %}
             {% set mount, usage = line.split() %}
@@ -34,10 +34,12 @@
           All file systems are good
           {% endif %}
 
+          ==============================================================================
+
     - name: Save disk report to temporary file on the AWX controller
       local_action:
         module: copy
-        content: "{{ disk_report }}\n\n===============================================\n\n"
+        content: "{{ disk_report }}\n"
         dest: /tmp/disk_usage_{{ inventory_hostname }}.txt
 
     - name: Consolidate all reports into a single file on the AWX controller
