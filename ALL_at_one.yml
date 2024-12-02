@@ -1,102 +1,57 @@
-import csv
-import socket
-import platform
-import subprocess
+---
+- name: Collect server information
+  hosts: all
+  become: yes
+  tasks:
+    - name: Gather Hostname
+      command: hostname
+      register: hostname_output
 
-# Function to get hostname
-def get_hostname():
-    return socket.gethostname()
+    - name: Gather IP Address
+      command: hostname -I
+      register: ip_output
 
-# Function to get IP address
-def get_ip_address():
-    hostname = get_hostname()
-    return socket.gethostbyname(hostname)
+    - name: Gather OS Version
+      command: cat /etc/os-release
+      register: os_version_output
 
-# Function to get OS version
-def get_os_version():
-    return platform.platform()
+    - name: Gather Running Services
+      command: service --status-all
+      register: running_services_output
 
-# Function to get running services
-def get_running_services():
-    result = subprocess.run(['service', '--status-all'], stdout=subprocess.PIPE)
-    return result.stdout.decode('utf-8')
+    - name: Gather MySQL Version
+      command: mysql --version
+      register: mysql_version_output
+      ignore_errors: yes
 
-# Function to get database information and version
-def get_database_info():
-    databases = []
-    # Check for MySQL
-    result = subprocess.run(['mysql', '--version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if result.returncode == 0:
-        databases.append(('MySQL', result.stdout.decode('utf-8').strip()))
-    
-    # Check for Oracle DB
-    result = subprocess.run(['sqlplus', '-v'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if result.returncode == 0:
-        databases.append(('Oracle DB', result.stdout.decode('utf-8').strip()))
-    
-    return databases
+    - name: Gather Oracle DB Version
+      command: sqlplus -v
+      register: oracle_version_output
+      ignore_errors: yes
 
-# Function to get PHP version
-def get_php_version():
-    result = subprocess.run(['php', '--version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if result.returncode == 0:
-        return result.stdout.decode('utf-8').split('\n')[0]
-    return 'Not installed'
+    - name: Gather PHP Version
+      command: php --version
+      register: php_version_output
+      ignore_errors: yes
 
-# Function to get web services and their versions
-def get_web_services():
-    web_services = []
-    
-    # Check for Apache
-    result = subprocess.run(['apache2', '-v'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if result.returncode == 0:
-        web_services.append(('Apache', result.stdout.decode('utf-8').strip()))
-    
-    # Check for Tomcat
-    result = subprocess.run(['tomcat', '-v'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if result.returncode == 0:
-        web_services.append(('Tomcat', result.stdout.decode('utf-8').strip()))
-    
-    # Check for Nginx
-    result = subprocess.run(['nginx', '-v'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if result.returncode == 0:
-        web_services.append(('Nginx', result.stderr.decode('utf-8').strip()))  # Nginx version is in stderr
-    
-    return web_services
+    - name: Gather Apache Version
+      command: apache2 -v
+      register: apache_version_output
+      ignore_errors: yes
 
-# Function to write data to CSV file
-def write_to_csv(data, filename):
-    with open(filename, 'w', newline='') as csvfile:
-        fieldnames = ['Hostname', 'IP Address', 'OS Version', 'Database Information', 'Database Version', 'PHP Version', 'Web Services', 'Web Services Version', 'Running Services']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        
-        writer.writeheader()
-        writer.writerow(data)
+    - name: Gather Tomcat Version
+      command: tomcat -v
+      register: tomcat_version_output
+      ignore_errors: yes
 
-# Collect all information
-hostname = get_hostname()
-ip_address = get_ip_address()
-os_version = get_os_version()
-running_services = get_running_services()
-database_info = get_database_info()
-php_version = get_php_version()
-web_services = get_web_services()
+    - name: Gather Nginx Version
+      command: nginx -v
+      register: nginx_version_output
+      ignore_errors: yes
 
-# Prepare data for CSV
-data = {
-    'Hostname': hostname,
-    'IP Address': ip_address,
-    'OS Version': os_version,
-    'Database Information': ', '.join([db[0] for db in database_info]),
-    'Database Version': ', '.join([db[1] for db in database_info]),
-    'PHP Version': php_version,
-    'Web Services': ', '.join([ws[0] for ws in web_services]),
-    'Web Services Version': ', '.join([ws[1] for ws in web_services]),
-    'Running Services': running_services
-}
-
-# Write data to CSV file on the specified server path
-csv_filename = '/home/svc_aux/backup/all_server_information.csv'
-write_to_csv(data, csv_filename)
-
-print(f"All server information has been collected and saved to {csv_filename}.")
+    - name: Create CSV file with server information
+      copy:
+        content: |
+          Hostname,IP Address,OS Version,Database Information,Database Version,PHP Version,Web Services,Web Services Version,Running Services
+          {{ hostname_output.stdout }},{{ ip_output.stdout }},{{ os_version_output.stdout }},MySQL,{{ mysql_version_output.stdout }},{{ php_version_output.stdout }},Apache,{{ apache_version_output.stdout }},{{ running_services_output.stdout }}
+        dest: /home/svc_aux/backup/all_server_information.csv
