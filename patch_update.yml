@@ -67,6 +67,12 @@
     - name: Kill any existing apt processes
       command: pkill -f apt
       ignore_errors: yes
+      register: pkill_result
+
+    - name: Handle pkill non-zero return code
+      debug:
+        msg: "No apt processes were killed"
+      when: pkill_result.rc != 0
 
     - name: Patch the server
       apt:
@@ -97,12 +103,11 @@
               Reboot Required: {{ reboot_required }}
 
         - name: Save results to file
-          copy:
-            dest: "/home/svc_aux/backup/patchstatus/patchstatus.csv"
-            content: |
-              Hostname,Filesystem Check,Repository Check,Patch Status,Updated Patches,Reboot Required
+          lineinfile:
+            path: "/home/svc_aux/backup/patchstatus/patchstatus.csv"
+            line: |
               {{ ansible_facts['hostname'] }},{{ fs_check_status_root }}|{{ fs_check_status_boot }}|{{ fs_check_status_var }},{{ repo_check_status }},{{ patch_status }},{{ updated_patches | join(', ') }},{{ reboot_required }}
-            append: yes
+            create: yes
           delegate_to: localhost
 
     - name: Print final status message
