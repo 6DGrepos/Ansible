@@ -16,11 +16,11 @@
       
     - name: Verify sufficient space
       ansible.builtin.assert:
-        that: "{{ available_space.results[item.0].stdout|int }} >= {{ min_space_mb }}"
-        fail_msg: "Insufficient space in {{ item.1 }}"
-      loop: "{{ available_space.results|enumerate }}"
+        that: "{{ item.stdout|int }} >= {{ min_space_mb }}"
+        fail_msg: "Insufficient space in {{ item.item }}"
+      loop: "{{ available_space.results }}"
       loop_control:
-        label: "{{ item.1 }}"
+        label: "{{ item.item }}"
 
     - name: Update apt cache
       ansible.builtin.apt:
