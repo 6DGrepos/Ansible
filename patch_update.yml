@@ -4,8 +4,19 @@
   become: yes
   vars:
     min_space_mb: 500
+    status_file: "/home/svc_aux/backup/patchstatus/patch_status.csv"
 
   tasks:
+    - name: Initialize patch status
+      set_fact:
+        patch_status:
+          hostname: "{{ inventory_hostname }}"
+          filesystem_check: "FAILED"
+          repo_check: "FAILED"
+          patch_update: "FAILED"
+          patches_updated: []
+          reboot_required: "no"
+
     - name: Check available space in filesystems
       ansible.builtin.shell: df -m {{ item }} | awk 'NR==2 {print $4}'
       register: available_space
@@ -21,6 +32,13 @@
       loop: "{{ available_space.results }}"
       loop_control:
         label: "{{ item.item }}"
+      register: space_check
+      ignore_errors: yes
+
+    - name: Set filesystem check status
+      set_fact:
+        patch_status: "{{ patch_status | combine({'filesystem_check': 'SUCCESS'}) }}"
+      when: space_check is success
 
     - name: Update apt cache
       ansible.builtin.apt:
@@ -28,34 +46,60 @@
       register: apt_update_result
       ignore_errors: yes
 
-    - name: Display apt update error
-      ansible.builtin.debug:
-        msg: "Failed to update apt cache: {{ apt_update_result.msg }}"
-      when: apt_update_result is failed
-
     - name: Check if repos are up-to-date and valid
       ansible.builtin.command: apt-get update
+      args:
+        warn: false
       register: apt_check_result
       changed_when: false
       failed_when: false
 
-    - name: Display repo check results
-      ansible.builtin.debug:
-        msg: "Repo check result: {{ apt_check_result.stdout_lines }}"
+    - name: Set repo check status
+      set_fact:
+        patch_status: "{{ patch_status | combine({'repo_check': 'SUCCESS'}) }}"
+      when: apt_update_result is success and apt_check_result.rc == 0
 
     - name: Perform system upgrade
       ansible.builtin.apt:
         upgrade: dist
       register: upgrade_result
       when: apt_update_result is success
+      ignore_errors: yes
+
+    - name: Set patch update status and list
+      set_fact:
+        patch_status: "{{ patch_status | combine({
+          'patch_update': 'SUCCESS',
+          'patches_updated': upgrade_result.stdout_lines | select('match', '^Unpacking') | list | map('regex_replace', '^Unpacking (\\S+).*', '\\1') | list
+        }) }}"
+      when: upgrade_result is defined and upgrade_result is success
+
+    - name: Set no patches available status
+      set_fact:
+        patch_status: "{{ patch_status | combine({
+          'patch_update': 'SUCCESS',
+          'patches_updated': ['No patches available']
+        }) }}"
+      when: upgrade_result is defined and upgrade_result is success and upgrade_result.stdout == ""
 
     - name: Check if reboot is required
       ansible.builtin.stat:
         path: /var/run/reboot-required
       register: reboot_required
-      when: upgrade_result is defined and upgrade_result is success
 
-    - name: Display reboot status
+    - name: Set reboot required status
+      set_fact:
+        patch_status: "{{ patch_status | combine({'reboot_required': 'yes'}) }}"
+      when: reboot_required.stat.exists
+
+    - name: Update patch status file
+      ansible.builtin.lineinfile:
+        path: "{{ status_file }}"
+        line: "{{ patch_status.hostname }},{{ patch_status.filesystem_check }},{{ patch_status.repo_check }},{{ patch_status.patch_update }},{{ patch_status.patches_updated | join(', ') }},{{ patch_status.reboot_required }}"
+        create: yes
+      delegate_to: 10.1.34.26
+      run_once: true
+
+    - name: Display patch status
       ansible.builtin.debug:
-        msg: "Reboot is {{ 'required' if reboot_required.stat.exists|default(false) else 'not required' }}"
-      when: reboot_required is defined
+        var: patch_status
