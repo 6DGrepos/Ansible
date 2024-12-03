@@ -12,7 +12,7 @@
 
     - name: Check if root filesystem has sufficient space
       set_fact:
-        fs_check_status_root: "{{ 'passed' if (fs_root.stdout | regex_search('(\d+)G') | int) >= 2 else 'failed' }}"
+        fs_check_status_root: "{{ 'passed' if (fs_root.stdout | regex_search('(\\d+)G') | int) >= 2 else 'failed' }}"
 
     - name: Check free space on /boot filesystem
       command: df -BG /boot
@@ -22,7 +22,7 @@
 
     - name: Check if /boot filesystem has sufficient space
       set_fact:
-        fs_check_status_boot: "{{ 'passed' if (fs_boot.stdout | regex_search('(\d+)G') | int) >= 1 else 'failed' }}"
+        fs_check_status_boot: "{{ 'passed' if (fs_boot.stdout | regex_search('(\\d+)G') | int) >= 1 else 'failed' }}"
 
     - name: Check free space on /var filesystem
       command: df -BG /var
@@ -32,7 +32,7 @@
 
     - name: Check if /var filesystem has sufficient space
       set_fact:
-        fs_check_status_var: "{{ 'passed' if (fs_var.stdout | regex_search('(\d+)G') | int) >= 2 else 'failed' }}"
+        fs_check_status_var: "{{ 'passed' if (fs_var.stdout | regex_search('(\\d+)G') | int) >= 2 else 'failed' }}"
 
     - name: Check if apt repositories are valid
       command: apt update
@@ -56,7 +56,7 @@
 
     - name: List the patches that are updated
       set_fact:
-        updated_patches: "{{ patch_list.stdout | regex_findall('([a-zA-Z0-9\-\.]+)') }}"
+        updated_patches: "{{ patch_list.stdout | regex_findall('([a-zA-Z0-9\\-\\.]+)') }}"
       when: patch_status == 'success'
 
     - name: Patch the server
