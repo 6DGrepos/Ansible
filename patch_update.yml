@@ -1,86 +1,94 @@
 ---
-- name: Patch Ubuntu servers
-  hosts: all
+- name: Patch Ubuntu Servers with Filesystem Checks
+  hosts: ubuntu_servers
   become: yes
   vars:
-    local_patch_status_file: "/tmp/patchstatus.out"
-    remote_patch_status_file: "/home/svc_aux/backup/patchstatus/patchstatus.out"
-    min_free_space_mb: 1024  # Minimum free space required in MB
+    min_disk_space_mb: 1024  # Minimum disk space required in MB for patching
+    csv_path: "/home/svc_aux/backup/patchstatus/patch_status.csv"
+    remote_csv_path: "10.1.34.26:/home/svc_aux/backup/patchstatus/patch_status.csv"
+    patch_status: []
+
   tasks:
-    - name: Check free space on /
-      command: df -m --output=avail /
-      register: root_fs
+    - name: Check available disk space on /
+      ansible.builtin.shell: "df --output=avail / | tail -1"
+      register: root_disk_space
       changed_when: false
 
-    - name: Check free space on /boot
-      command: df -m --output=avail /boot
-      register: boot_fs
+    - name: Check available disk space on /var
+      ansible.builtin.shell: "df --output=avail /var | tail -1"
+      register: var_disk_space
       changed_when: false
 
-    - name: Check free space on /var
-      command: df -m --output=avail /var
-      register: var_fs
+    - name: Check available disk space on /boot
+      ansible.builtin.shell: "df --output=avail /boot | tail -1"
+      register: boot_disk_space
       changed_when: false
 
-    - name: Validate free space
-      fail:
-        msg: "Insufficient free space on {{ item.mount }}"
-      when: item.avail | int < min_free_space_mb
-      with_items:
-        - { mount: '/', avail: "{{ root_fs.stdout_lines[1] }}" }
-        - { mount: '/boot', avail: "{{ boot_fs.stdout_lines[1] }}" }
-        - { mount: '/var', avail: "{{ var_fs.stdout_lines[1] }}" }
-      ignore_errors: yes
-      register: free_space_check
-
-    - name: Check if all repositories are valid
-      command: apt-get update
-      register: apt_update
-      changed_when: false
-      failed_when: "'Err' in apt_update.stderr"
+    - name: Validate disk space for all filesystems
+      ansible.builtin.fail:
+        msg: |
+          Insufficient disk space:
+          / - Available: {{ root_disk_space.stdout | int }} MB, Required: {{ min_disk_space_mb }} MB
+          /var - Available: {{ var_disk_space.stdout | int }} MB, Required: {{ min_disk_space_mb }} MB
+          /boot - Available: {{ boot_disk_space.stdout | int }} MB, Required: {{ min_disk_space_mb }} MB
+      when: >
+        root_disk_space.stdout | int < min_disk_space_mb or
+        var_disk_space.stdout | int < min_disk_space_mb or
+        boot_disk_space.stdout | int < min_disk_space_mb
+      failed_when: true
       ignore_errors: yes
 
-    - name: Gather patch status
-      shell: uname -r
-      register: kernel_version
-
-    - name: Create patch status report for failed checks
-      lineinfile:
-        path: "{{ local_patch_status_file }}"
-        line: "Hostname,File system check,Repo check,Patch update,List of patches updated,Reboot required\n{{ inventory_hostname }},{{ 'Failed' if free_space_check is failed else 'success' }},{{ 'Failed' if apt_update is failed else 'success' }},Failed,none,No"
-        create: yes
-      when: free_space_check is failed or apt_update is failed
+    - name: Check if all repositories are valid and up to date
+      ansible.builtin.shell: "sudo apt-get update"
+      register: repo_status
+      changed_when: false
       ignore_errors: yes
 
-    - name: Skip patching if checks failed
-      meta: end_play
-      when: free_space_check is failed or apt_update is failed
+    - name: Validate repository status
+      ansible.builtin.fail:
+        msg: "Repository update failed."
+      when: repo_status.rc != 0
+      ignore_errors: yes
 
-    - name: Patch the server
-      apt:
+    - name: Patching the server
+      ansible.builtin.apt:
         upgrade: dist
-      register: apt_upgrade
-      when: apt_update is succeeded
+        update_cache: yes
+        autoremove: yes
+      register: patch_result
+      when:
+        - root_disk_space.stdout | int >= min_disk_space_mb
+        - var_disk_space.stdout | int >= min_disk_space_mb
+        - boot_disk_space.stdout | int >= min_disk_space_mb
+        - repo_status.rc == 0
       ignore_errors: yes
 
     - name: Check if reboot is required
-      command: needs-restarting -r
+      ansible.builtin.shell: "if [ -f /var/run/reboot-required ]; then echo 'true'; else echo 'false'; fi"
       register: reboot_required
       changed_when: false
-      when: apt_upgrade is succeeded
-      ignore_errors: yes
 
-    - name: Create patch status report for successful checks
-      lineinfile:
-        path: "{{ local_patch_status_file }}"
-        line: "{{ inventory_hostname }},success,success,{{ 'success' if apt_upgrade is succeeded else 'Failed' }},{{ apt_upgrade.stdout_lines | join(' ') | default('No patches available to update') }},{{ 'yes' if reboot_required.rc == 1 else 'No' }}"
+    - name: Record patch status
+      ansible.builtin.lineinfile:
+        path: /tmp/patch_status.csv
         create: yes
-      when: free_space_check is succeeded and apt_update is succeeded and apt_upgrade is succeeded and reboot_required is succeeded
+        line: |
+          {{ inventory_hostname }},
+          Root_Disk: {{ root_disk_space.stdout | int >= min_disk_space_mb | ternary('SUCCESS', 'FAILED') }},
+          Var_Disk: {{ var_disk_space.stdout | int >= min_disk_space_mb | ternary('SUCCESS', 'FAILED') }},
+          Boot_Disk: {{ boot_disk_space.stdout | int >= min_disk_space_mb | ternary('SUCCESS', 'FAILED') }},
+          Repo_Status: {{ repo_status.rc == 0 | ternary('SUCCESS', 'FAILED') }},
+          Patch_Status: {{ patch_result.failed | ternary('FAILED', 'SUCCESS') }},
+          Reboot_Required: {{ reboot_required.stdout.strip() }},
+          Message: {{ patch_result.msg | default('') }}
+        state: present
+
+    - name: Copy CSV to remote server
+      ansible.builtin.shell: "scp /tmp/patch_status.csv {{ remote_csv_path }}"
+      delegate_to: localhost
       ignore_errors: yes
 
-    - name: Copy patch status report to remote server
-      copy:
-        src: "{{ local_patch_status_file }}"
-        dest: "{{ remote_patch_status_file }}"
-      delegate_to: 10.1.34.26
-      run_once: true
+    - name: Cleanup temporary CSV file
+      ansible.builtin.file:
+        path: /tmp/patch_status.csv
+        state: absent
