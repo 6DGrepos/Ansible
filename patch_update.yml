@@ -1,94 +1,63 @@
 ---
 - name: Patch Ubuntu Servers with Filesystem Checks
-  hosts: all
+  hosts: ubuntu_servers
   become: yes
   vars:
-    min_disk_space_mb: 1024  # Minimum disk space required in MB for patching
-    csv_path: "/home/svc_aux/backup/patchstatus/patch_status.csv"
-    remote_csv_path: "10.1.34.26:/home/svc_aux/backup/patchstatus/patch_status.csv"
-    patch_status: []
+    min_disk_space_mb: 1000  # Minimum required disk space in MB
+    csv_file_path: "/home/svc_aux/backup/patchstatus/patch_status.csv"
 
   tasks:
-    - name: Check available disk space on /
-      ansible.builtin.shell: "df --output=avail / | tail -1"
+    - name: Check root disk space
+      shell: "df --output=avail / | tail -n 1"
       register: root_disk_space
-      changed_when: false
+      failed_when: root_disk_space.stdout | int < min_disk_space_mb
+      ignore_errors: yes
 
-    - name: Check available disk space on /var
-      ansible.builtin.shell: "df --output=avail /var | tail -1"
+    - name: Check var disk space
+      shell: "df --output=avail /var | tail -n 1"
       register: var_disk_space
-      changed_when: false
+      failed_when: var_disk_space.stdout | int < min_disk_space_mb
+      ignore_errors: yes
 
-    - name: Check available disk space on /boot
-      ansible.builtin.shell: "df --output=avail /boot | tail -1"
+    - name: Check boot disk space
+      shell: "df --output=avail /boot | tail -n 1"
       register: boot_disk_space
-      changed_when: false
-
-    - name: Validate disk space for all filesystems
-      ansible.builtin.fail:
-        msg: |
-          Insufficient disk space:
-          / - Available: {{ root_disk_space.stdout | int }} MB, Required: {{ min_disk_space_mb }} MB
-          /var - Available: {{ var_disk_space.stdout | int }} MB, Required: {{ min_disk_space_mb }} MB
-          /boot - Available: {{ boot_disk_space.stdout | int }} MB, Required: {{ min_disk_space_mb }} MB
-      when: >
-        root_disk_space.stdout | int < min_disk_space_mb or
-        var_disk_space.stdout | int < min_disk_space_mb or
-        boot_disk_space.stdout | int < min_disk_space_mb
-      failed_when: true
+      failed_when: boot_disk_space.stdout | int < min_disk_space_mb
       ignore_errors: yes
 
-    - name: Check if all repositories are valid and up to date
-      ansible.builtin.shell: "sudo apt-get update"
+    - name: Validate repositories
+      shell: "apt-get update"
       register: repo_status
-      changed_when: false
       ignore_errors: yes
 
-    - name: Validate repository status
-      ansible.builtin.fail:
-        msg: "Repository update failed."
-      when: repo_status.rc != 0
-      ignore_errors: yes
-
-    - name: Patching the server
-      ansible.builtin.apt:
+    - name: Apply patches
+      apt:
         upgrade: dist
-        update_cache: yes
-        autoremove: yes
       register: patch_result
-      when:
+      ignore_errors: yes
+      when: 
         - root_disk_space.stdout | int >= min_disk_space_mb
         - var_disk_space.stdout | int >= min_disk_space_mb
         - boot_disk_space.stdout | int >= min_disk_space_mb
         - repo_status.rc == 0
-      ignore_errors: yes
 
     - name: Check if reboot is required
-      ansible.builtin.shell: "if [ -f /var/run/reboot-required ]; then echo 'true'; else echo 'false'; fi"
+      shell: "if [ -f /var/run/reboot-required ]; then echo yes; else echo no; fi"
       register: reboot_required
       changed_when: false
 
     - name: Record patch status
-      ansible.builtin.lineinfile:
-        path: /tmp/patch_status.csv
-        create: yes
+      lineinfile:
+        path: "{{ csv_file_path }}"
         line: |
           {{ inventory_hostname }},
-          Root_Disk: {{ root_disk_space.stdout | int >= min_disk_space_mb | ternary('SUCCESS', 'FAILED') }},
-          Var_Disk: {{ var_disk_space.stdout | int >= min_disk_space_mb | ternary('SUCCESS', 'FAILED') }},
-          Boot_Disk: {{ boot_disk_space.stdout | int >= min_disk_space_mb | ternary('SUCCESS', 'FAILED') }},
+          Root_Disk: {{ root_disk_space.stdout.strip() | int >= min_disk_space_mb | ternary('SUCCESS', 'FAILED') }},
+          Var_Disk: {{ var_disk_space.stdout.strip() | int >= min_disk_space_mb | ternary('SUCCESS', 'FAILED') }},
+          Boot_Disk: {{ boot_disk_space.stdout.strip() | int >= min_disk_space_mb | ternary('SUCCESS', 'FAILED') }},
           Repo_Status: {{ repo_status.rc == 0 | ternary('SUCCESS', 'FAILED') }},
-          Patch_Status: {{ patch_result.failed | ternary('FAILED', 'SUCCESS') }},
+          Patch_Status: {{ patch_result is failed | ternary('FAILED', 'SUCCESS') }},
           Reboot_Required: {{ reboot_required.stdout.strip() }},
           Message: {{ patch_result.msg | default('') }}
-        state: present
-
-    - name: Copy CSV to remote server
-      ansible.builtin.shell: "scp /tmp/patch_status.csv {{ remote_csv_path }}"
-      delegate_to: localhost
-      ignore_errors: yes
-
-    - name: Cleanup temporary CSV file
-      ansible.builtin.file:
-        path: /tmp/patch_status.csv
-        state: absent
+      create: yes
+      mode: '0644'
+      ignore_errors: no
