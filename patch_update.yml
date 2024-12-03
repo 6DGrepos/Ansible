@@ -3,6 +3,12 @@
   hosts: all
   gather_facts: no
   tasks:
+    - name: Ensure 'needrestart' is installed (Ubuntu-based)
+      apt:
+        name: needrestart
+        state: present
+      when: ansible_facts['os_family'] == 'Debian'
+
     - name: Remove previous CSV content (if exists)
       file:
         path: /tmp/patch_status_report.csv
@@ -18,31 +24,52 @@
     - name: Check disk space for root
       command: df -h /
       register: root_disk_space
+      ignore_errors: yes
 
     - name: Check disk space for /var
       command: df -h /var
       register: var_disk_space
+      ignore_errors: yes
 
     - name: Check disk space for /boot
       command: df -h /boot
       register: boot_disk_space
+      ignore_errors: yes
 
     - name: Check if repository is up to date
       command: apt-get update
       register: repo_status
+      ignore_errors: yes
 
     - name: Perform system update
       apt:
         upgrade: dist
       register: patch_result
+      ignore_errors: yes
 
-    - name: Check if reboot is required
+    - name: Check if reboot is required (Ubuntu)
+      command: needrestart -r
+      register: reboot_required
+      when: ansible_facts['os_family'] == 'Debian'
+      ignore_errors: yes
+
+    - name: Check if reboot is required (RHEL/CentOS)
       command: needs-restarting
       register: reboot_required
+      when: ansible_facts['os_family'] == 'RedHat'
       ignore_errors: yes
+
+    - name: Ensure that variables are defined before appending to CSV
+      set_fact:
+        root_disk_space: "{{ root_disk_space.stdout | default('N/A') }}"
+        var_disk_space: "{{ var_disk_space.stdout | default('N/A') }}"
+        boot_disk_space: "{{ boot_disk_space.stdout | default('N/A') }}"
+        repo_status: "{{ repo_status.stdout | default('N/A') }}"
+        patch_result: "{{ patch_result.stdout | default('No patches available') }}"
+        reboot_required: "{{ reboot_required.stdout | default('No') }}"
 
     - name: Append patch status to CSV file
       lineinfile:
         path: /tmp/patch_status_report.csv
-        line: "{{ inventory_hostname }}, {{ root_disk_space.stdout }}, {{ var_disk_space.stdout }}, {{ boot_disk_space.stdout }}, {{ repo_status.stdout }}, {{ patch_result.stdout }}, {{ reboot_required.stdout }}"
+        line: "{{ inventory_hostname }}, {{ root_disk_space }}, {{ var_disk_space }}, {{ boot_disk_space }}, {{ repo_status }}, {{ patch_result }}, {{ reboot_required }}"
         create: yes
