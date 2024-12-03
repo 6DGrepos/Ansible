@@ -1,79 +1,48 @@
 ---
 - name: Patch Ubuntu Servers with Filesystem Checks
   hosts: all
-  become: yes
-  vars:
-    min_disk_space_mb: 1000  # Minimum required disk space in MB
-    csv_file_path: "/home/svc_aux/backup/patchstatus/patch_status.csv"
-    csv_header: "Hostname,File system check,Repo check,Patch update,List of patches updated,Reboot required\n"
-
+  gather_facts: no
   tasks:
-    - name: Ensure CSV file exists with header if missing
-      block:
-        - name: Check if CSV file exists and has the header
-          shell: "grep -q '^Hostname' {{ csv_file_path }} || echo 'missing'"
-          register: csv_header_check
-          changed_when: false
+    - name: Remove previous CSV content (if exists)
+      file:
+        path: /tmp/patch_status_report.csv
+        state: absent
 
-        - name: Add header if not present
-          lineinfile:
-            path: "{{ csv_file_path }}"
-            line: "{{ csv_header.strip() }}"
-            create: yes
-            insertafter: EOF
-          when: csv_header_check.stdout == "missing"
+    - name: Create a new CSV file with headers
+      copy:
+        content: |
+          Hostname, File system check, Repo check, Patch update, List of patches updated, Reboot required
+        dest: /tmp/patch_status_report.csv
+        mode: '0644'
 
-    - name: Check root disk space
-      shell: "df --output=avail / | tail -n 1"
+    - name: Check disk space for root
+      command: df -h /
       register: root_disk_space
-      ignore_errors: yes
 
-    - name: Check var disk space
-      shell: "df --output=avail /var | tail -n 1"
+    - name: Check disk space for /var
+      command: df -h /var
       register: var_disk_space
-      ignore_errors: yes
 
-    - name: Check boot disk space
-      shell: "df --output=avail /boot | tail -n 1"
+    - name: Check disk space for /boot
+      command: df -h /boot
       register: boot_disk_space
-      ignore_errors: yes
 
-    - name: Validate repositories
-      shell: "apt-get update"
+    - name: Check if repository is up to date
+      command: apt-get update
       register: repo_status
-      ignore_errors: yes
 
-    - name: Apply patches and list changes
+    - name: Perform system update
       apt:
         upgrade: dist
       register: patch_result
-      ignore_errors: yes
-      when:
-        - root_disk_space.stdout | int >= min_disk_space_mb
-        - var_disk_space.stdout | int >= min_disk_space_mb
-        - boot_disk_space.stdout | int >= min_disk_space_mb
-        - repo_status.rc == 0
-
-    - name: Get list of updated packages
-      shell: "apt list --upgradable 2>/dev/null"
-      register: patch_list
-      changed_when: false
-      when: patch_result is succeeded
 
     - name: Check if reboot is required
-      shell: "if [ -f /var/run/reboot-required ]; then echo yes; else echo no; fi"
+      command: needs-restarting
       register: reboot_required
-      changed_when: false
+      ignore_errors: yes
 
-    - name: Create patch status report template
-      template:
-        src: patch_status_template.j2
-        dest: /tmp/patch_status_report.txt
-
-    - name: Append patch status to CSV
-      copy:
-        src: /tmp/patch_status_report.txt
-        dest: "{{ csv_file_path }}"
-        remote_src: yes
-        mode: '0644'
-        append: yes
+    - name: Append patch status to CSV file
+      lineinfile:
+        path: /tmp/patch_status_report.csv
+        line: "{{ inventory_hostname }}, {{ root_disk_space.stdout }}, {{ var_disk_space.stdout }}, {{ boot_disk_space.stdout }}, {{ repo_status.stdout }}, {{ patch_result.stdout }}, {{ reboot_required.stdout }}"
+        create: yes
