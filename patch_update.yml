@@ -5,30 +5,36 @@
   vars:
     min_disk_space_mb: 1000  # Minimum required disk space in MB
     csv_file_path: "/home/svc_aux/backup/patchstatus/patch_status.csv"
+    csv_header: "Hostname,File system check,Repo check,Patch update,List of patches updated,Reboot required\n"
 
   tasks:
-    - name: Ensure CSV file exists with header
-      copy:
-        dest: "{{ csv_file_path }}"
-        content: "Hostname,File system check,Repo check,Patch update,List of patches updated,Reboot required\n"
-        force: no
+    - name: Ensure CSV file exists and has a header
+      block:
+        - name: Check if CSV file already has the header
+          shell: "head -n 1 {{ csv_file_path }} | grep -q 'Hostname'"
+          register: csv_header_check
+          ignore_errors: yes
+
+        - name: Add header if not present
+          copy:
+            dest: "{{ csv_file_path }}"
+            content: "{{ csv_header }}"
+            force: no
+          when: csv_header_check.failed
 
     - name: Check root disk space
       shell: "df --output=avail / | tail -n 1"
       register: root_disk_space
-      failed_when: root_disk_space.stdout | int < min_disk_space_mb
       ignore_errors: yes
 
     - name: Check var disk space
       shell: "df --output=avail /var | tail -n 1"
       register: var_disk_space
-      failed_when: var_disk_space.stdout | int < min_disk_space_mb
       ignore_errors: yes
 
     - name: Check boot disk space
       shell: "df --output=avail /boot | tail -n 1"
       register: boot_disk_space
-      failed_when: boot_disk_space.stdout | int < min_disk_space_mb
       ignore_errors: yes
 
     - name: Validate repositories
@@ -41,14 +47,14 @@
         upgrade: dist
       register: patch_result
       ignore_errors: yes
-      when: 
+      when:
         - root_disk_space.stdout | int >= min_disk_space_mb
         - var_disk_space.stdout | int >= min_disk_space_mb
         - boot_disk_space.stdout | int >= min_disk_space_mb
         - repo_status.rc == 0
 
     - name: Get list of updated packages
-      shell: "apt list --upgradable"
+      shell: "apt list --upgradable 2>/dev/null"
       register: patch_list
       changed_when: false
       when: patch_result is succeeded
@@ -69,5 +75,7 @@
               (boot_disk_space.stdout | int >= min_disk_space_mb) | ternary('SUCCESS', 'FAILED') }},
           {{ repo_status.rc == 0 | ternary('SUCCESS', 'FAILED') }},
           {{ patch_result is succeeded | ternary('SUCCESS', 'FAILED') }},
-          {{ patch_list.stdout_lines | join(', ') }},
-          {{ reboot_required.stdout.strip() }}
+          {{ patch_list.stdout_lines | join(', ') | default('No patches available') }},
+          {{ reboot_required.stdout.strip() | default('no') }}
+      backup: no
+      state: present
