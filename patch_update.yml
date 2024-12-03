@@ -1,125 +1,100 @@
 ---
-- name: Patch Ubuntu Servers
+- name: Patch and validate Ubuntu servers
   hosts: all
-  become: true
+  become: yes
+  gather_facts: yes
+
+  vars:
+    required_free_space: 2  # in GB for root and var, 1GB for /boot
+
   tasks:
-
-    - name: Check available free space on root filesystem (/)
+    - name: Check available space on root filesystem
       command: df -h /
-      register: disk_space_root
-      failed_when: false
+      register: df_root
+      changed_when: false
 
-    - name: Check available free space on /boot filesystem
+    - name: Check available space on /boot filesystem
       command: df -h /boot
-      register: disk_space_boot
-      failed_when: false
+      register: df_boot
+      changed_when: false
 
-    - name: Check available free space on /var filesystem
+    - name: Check available space on /var filesystem
       command: df -h /var
-      register: disk_space_var
-      failed_when: false
+      register: df_var
+      changed_when: false
 
-    - name: Parse available space on root filesystem
+    - name: Set filesystem check status for root
       set_fact:
-        available_space_root: "{{ disk_space_root.stdout_lines[1].split()[3] }}"
-
-    - name: Parse available space on /boot filesystem
+        fs_check_status_root: "{{ 'passed' if (df_root.stdout | regex_search('(\\d+\\.?\\d*)G') | regex_replace('\\s+', '') | regex_search('(\\d+\\.?\\d*)G') | int) >= required_free_space else 'failed' }}"
+    
+    - name: Set filesystem check status for /boot
       set_fact:
-        available_space_boot: "{{ disk_space_boot.stdout_lines[1].split()[3] }}"
+        fs_check_status_boot: "{{ 'passed' if (df_boot.stdout | regex_search('(\\d+\\.?\\d*)G') | regex_replace('\\s+', '') | regex_search('(\\d+\\.?\\d*)G') | int) >= 1 else 'failed' }}"
 
-    - name: Parse available space on /var filesystem
+    - name: Set filesystem check status for /var
       set_fact:
-        available_space_var: "{{ disk_space_var.stdout_lines[1].split()[3] }}"
+        fs_check_status_var: "{{ 'passed' if (df_var.stdout | regex_search('(\\d+\\.?\\d*)G') | regex_replace('\\s+', '') | regex_search('(\\d+\\.?\\d*)G') | int) >= required_free_space else 'failed' }}"
 
-    - name: Check if root filesystem has sufficient space
-      set_fact:
-        fs_check_status_root: "{{ 'passed' if (available_space_root | regex_search('(\d+\.?\d*)G') | int) >= 2 else 'failed' }}"
-
-    - name: Check if /boot filesystem has sufficient space
-      set_fact:
-        fs_check_status_boot: "{{ 'passed' if (available_space_boot | regex_search('(\d+\.?\d*)G') | int) >= 1 else 'failed' }}"
-
-    - name: Check if /var filesystem has sufficient space
-      set_fact:
-        fs_check_status_var: "{{ 'passed' if (available_space_var | regex_search('(\d+\.?\d*)G') | int) >= 2 else 'failed' }}"
-
-    - name: Fail if insufficient space on root filesystem (/)
-      fail:
-        msg: "Insufficient space on root filesystem (/). Available space: {{ available_space_root }}. Please free up space before proceeding."
-      when: fs_check_status_root == "failed"
-
-    - name: Fail if insufficient space on /boot filesystem
-      fail:
-        msg: "Insufficient space on /boot filesystem. Available space: {{ available_space_boot }}. Please free up space before proceeding."
-      when: fs_check_status_boot == "failed"
-
-    - name: Fail if insufficient space on /var filesystem
-      fail:
-        msg: "Insufficient space on /var filesystem. Available space: {{ available_space_var }}. Please free up space before proceeding."
-      when: fs_check_status_var == "failed"
-
-    - name: Check if all APT repositories are valid
-      apt:
-        update_cache: yes
-      register: apt_update
-      failed_when: apt_update.rc != 0
+    - name: Check if apt repositories are valid
+      command: apt update -y
+      register: apt_update_result
+      failed_when: "'E: ' in apt_update_result.stderr"
+      changed_when: false
       ignore_errors: yes
 
     - name: Set repository check status
       set_fact:
-        repo_check_status: "{{ 'passed' if apt_update.rc == 0 else 'failed' }}"
+        repo_check_status: "{{ 'passed' if apt_update_result.rc == 0 else 'failed' }}"
 
-    - name: Fail if repository check fails
-      fail:
-        msg: "One or more repositories are not accessible or valid."
-      when: repo_check_status == "failed"
+    - name: Perform package update
+      command: apt upgrade -y
+      register: upgrade_result
+      changed_when: "'Need to get' in upgrade_result.stdout"
+      ignore_errors: yes
 
-    - name: Perform system update and patching
-      apt:
-        upgrade: dist
-        update_cache: yes
-        cache_valid_time: 3600
-      register: apt_upgrade
-      notify:
-        - check if reboot is required
+    - name: Set patch status
+      set_fact:
+        patch_status: "{{ 'success' if upgrade_result.rc == 0 else 'failed' }}"
 
-    - name: Capture list of updated packages
-      command: dpkg -l | grep '^ii' | awk '{print $2}' 
-      register: updated_packages
-      when: apt_upgrade.changed
+    - name: List updated patches
+      command: apt list --upgradable
+      register: updated_patches
+      when: patch_status == 'success'
 
-    - name: Display message if patches were applied
-      debug:
-        msg: "Patches were successfully applied to the system."
-
-    - name: Check if a reboot is required
-      stat:
-        path: /var/run/reboot-required
-      register: reboot_required
-      failed_when: false
-
-    - name: Notify if reboot is required
-      debug:
-        msg: "Reboot is required after patching the server."
-      when: reboot_required.stat.exists == true
-
-    - name: Create patch status log in CSV format
-      shell: |
-        echo "Hostname,Filesystem check,Repository Check status,Patch status,List of updated patches,Reboot required" > /home/svc_aux/backup/patchstatus/patchstatus.csv
-        echo "$(hostname -s),{{ fs_check_status_root }} {{ fs_check_status_boot }} {{ fs_check_status_var }},{{ repo_check_status }},{{ apt_upgrade.msg }},{{ updated_packages.stdout }},{{ 'yes' if reboot_required.stat.exists == true else 'no' }}" >> /home/svc_aux/backup/patchstatus/patchstatus.csv
-      delegate_to: 10.1.34.26
-      when: apt_upgrade.changed
-
-  handlers:
-    - name: check if reboot is required
+    - name: Check if reboot is required
       command: needs-restarting
       register: reboot_check
       failed_when: false
-      ignore_errors: true
+      changed_when: false
+      ignore_errors: yes
 
-    - name: Reboot the server if required
-      reboot:
-        msg: "Rebooting server as patches applied require a reboot."
-      when: reboot_check.rc == 1
-      async: 1
-      poll: 0
+    - name: Set reboot status
+      set_fact:
+        reboot_required: "{{ 'yes' if 'Reboot required' in reboot_check.stdout else 'no' }}"
+
+    - name: Prepare patch status data
+      set_fact:
+        patch_status_data: |
+          {{ inventory_hostname }} ; 
+          Filesystem Check Root: {{ fs_check_status_root }} ; 
+          Filesystem Check /boot: {{ fs_check_status_boot }} ; 
+          Filesystem Check /var: {{ fs_check_status_var }} ; 
+          Repository Check: {{ repo_check_status }} ; 
+          Patch Status: {{ patch_status }} ; 
+          List of Updated Patches: {{ updated_patches.stdout | default('No patches updated') }} ; 
+          Reboot Required: {{ reboot_required }}
+
+    - name: Save patch status to a file
+      local_action:
+        module: copy
+        content: "{{ patch_status_data }}"
+        dest: "/tmp/patchstatus_{{ inventory_hostname }}.out"
+      
+    - name: Copy patch status to central server
+      copy:
+        src: "/tmp/patchstatus_{{ inventory_hostname }}.out"
+        dest: "/home/svc_aux/backup/patchstatus/patchstatus.out"
+        remote_src: yes
+        owner: svc_aux
+        group: svc_aux
+        mode: '0644'
