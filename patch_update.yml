@@ -1,4 +1,4 @@
----
+--
 - name: Patch Ubuntu Servers with Filesystem Checks
   hosts: all
   gather_facts: yes
@@ -61,15 +61,16 @@
 
     - name: Ensure that variables are defined before appending to CSV
       set_fact:
-        root_disk_space: "{{ root_disk_space.stdout | default('N/A') }}"
-        var_disk_space: "{{ var_disk_space.stdout | default('N/A') }}"
-        boot_disk_space: "{{ boot_disk_space.stdout | default('N/A') }}"
-        repo_status: "{{ repo_status.stdout | default('N/A') }}"
-        patch_result: "{{ patch_result.stdout | default('No patches available') }}"
-        reboot_required: "{{ reboot_required.stdout | default('No') }}"
+        root_disk_status: "{{ 'SUCCESS' if root_disk_space.rc == 0 else 'FAILED' }}"
+        var_disk_status: "{{ 'SUCCESS' if var_disk_space.rc == 0 else 'FAILED' }}"
+        boot_disk_status: "{{ 'SUCCESS' if boot_disk_space.rc == 0 else 'FAILED' }}"
+        repo_status_check: "{{ 'SUCCESS' if repo_status.rc == 0 else 'FAILED' }}"
+        patch_update_status: "{{ 'SUCCESS' if patch_result.rc == 0 else 'FAILED' }}"
+        patches_updated: "{{ patch_result.stdout_lines | join(', ') | default('No patches available') }}"
+        reboot_required_status: "{{ 'yes' if reboot_required.stdout | search('NEEDRESTART-KSTA') else 'no' }}"
 
     - name: Append patch status to CSV file
       lineinfile:
         path: /tmp/patch_status_report.csv
-        line: "{{ inventory_hostname }}, {{ root_disk_space }}, {{ var_disk_space }}, {{ boot_disk_space }}, {{ repo_status }}, {{ patch_result }}, {{ reboot_required }}"
+        line: "{{ inventory_hostname }}, {{ root_disk_status }}, {{ var_disk_status }}, {{ boot_disk_status }}, {{ repo_status_check }}, {{ patch_update_status }}, {{ patches_updated }}, {{ reboot_required_status }}"
         create: yes
