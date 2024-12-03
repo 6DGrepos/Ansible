@@ -6,6 +6,8 @@
 
   vars:
     required_free_space: 2  # in GB for root and var, 1GB for /boot
+    max_retries: 5
+    retry_delay: 10
 
   tasks:
     - name: Check available space on root filesystem
@@ -35,16 +37,26 @@
       set_fact:
         fs_check_status_var: "{{ 'passed' if (df_var.stdout | regex_search('(\\d+\\.?\\d*)G') | regex_replace('\\s+', '') | regex_search('(\\d+\\.?\\d*)G') | int) >= required_free_space else 'failed' }}"
 
-    - name: Check if apt repositories are valid
-      command: apt update -y
-      register: apt_update_result
-      failed_when: "'E: ' in apt_update_result.stderr"
-      changed_when: false
-      ignore_errors: yes
-
-    - name: Set repository check status
-      set_fact:
-        repo_check_status: "{{ 'passed' if apt_update_result.rc == 0 else 'failed' }}"
+    - name: Check if apt repositories are valid (handling apt lock)
+      block:
+        - name: Run apt update command to check repo status
+          command: apt update -y
+          register: apt_update_result
+          failed_when: "'E: ' in apt_update_result.stderr"
+          changed_when: false
+          ignore_errors: yes
+          retries: "{{ max_retries }}"
+          delay: "{{ retry_delay }}"
+          until: apt_update_result.rc == 0
+          
+        - name: Set repository check status
+          set_fact:
+            repo_check_status: "{{ 'passed' if apt_update_result.rc == 0 else 'failed' }}"
+      
+      rescue:
+        - name: Fail gracefully if repository check fails
+          fail:
+            msg: "Failed to update apt repositories after multiple retries."
 
     - name: Perform package update
       command: apt upgrade -y
@@ -83,6 +95,11 @@
           Patch Status: {{ patch_status }} ; 
           List of Updated Patches: {{ updated_patches.stdout | default('No patches updated') }} ; 
           Reboot Required: {{ reboot_required }}
+
+    - name: Handle case when no new patches are available
+      set_fact:
+        patch_status_data: "{{ patch_status_data | replace('No patches updated', 'System is up-to-date, no new patches available') }}"
+      when: patch_status == 'success' and updated_patches.stdout == ""
 
     - name: Save patch status to a file
       local_action:
