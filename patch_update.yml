@@ -37,8 +37,7 @@
 
     - name: Set filesystem check status
       set_fact:
-        patch_status: "{{ patch_status | combine({'filesystem_check': 'SUCCESS'}) }}"
-      when: space_check is success
+        patch_status: "{{ patch_status | combine({'filesystem_check': 'SUCCESS' if space_check is success else 'FAILED'}) }}"
 
     - name: Update apt cache
       ansible.builtin.apt:
@@ -46,18 +45,9 @@
       register: apt_update_result
       ignore_errors: yes
 
-    - name: Check if repos are up-to-date and valid
-      ansible.builtin.command: apt-get update
-      args:
-        warn: false
-      register: apt_check_result
-      changed_when: false
-      failed_when: false
-
     - name: Set repo check status
       set_fact:
-        patch_status: "{{ patch_status | combine({'repo_check': 'SUCCESS'}) }}"
-      when: apt_update_result is success or apt_check_result.rc == 0
+        patch_status: "{{ patch_status | combine({'repo_check': 'SUCCESS' if apt_update_result is success else 'FAILED'}) }}"
 
     - name: Perform system upgrade
       ansible.builtin.apt:
@@ -68,18 +58,16 @@
     - name: Set patch update status and list
       set_fact:
         patch_status: "{{ patch_status | combine({
-          'patch_update': 'SUCCESS',
-          'patches_updated': upgrade_result.stdout_lines | select('match', '^Unpacking') | list | map('regex_replace', '^Unpacking (\\S+).*', '\\1') | list
+          'patch_update': 'SUCCESS' if upgrade_result is success else 'FAILED',
+          'patches_updated': upgrade_result.stdout_lines | select('match', '^Unpacking') | list | map('regex_replace', '^Unpacking (\\S+).*', '\\1') | list if upgrade_result is success else []
         }) }}"
-      when: upgrade_result is defined and upgrade_result is success
 
     - name: Set no patches available status
       set_fact:
         patch_status: "{{ patch_status | combine({
-          'patch_update': 'SUCCESS',
           'patches_updated': ['No patches available']
         }) }}"
-      when: upgrade_result is defined and upgrade_result is success and upgrade_result.stdout == ""
+      when: upgrade_result is success and upgrade_result.stdout == ""
 
     - name: Check if reboot is required
       ansible.builtin.stat:
@@ -88,8 +76,7 @@
 
     - name: Set reboot required status
       set_fact:
-        patch_status: "{{ patch_status | combine({'reboot_required': 'yes'}) }}"
-      when: reboot_required.stat.exists
+        patch_status: "{{ patch_status | combine({'reboot_required': 'yes' if reboot_required.stat.exists else 'no'}) }}"
 
     - name: Update patch status file
       ansible.builtin.lineinfile:
