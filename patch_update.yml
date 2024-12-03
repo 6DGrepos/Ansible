@@ -4,7 +4,7 @@
   become: yes
   vars:
     patch_status_file: "/home/svc_aux/backup/patchstatus/patchstatus.out"
-    min_free_space_mb: 500  # Minimum free space required in MB
+    min_free_space_mb: 1024  # Minimum free space required in MB
   tasks:
     - name: Check free space on /
       command: df -m --output=avail /
@@ -64,13 +64,13 @@
     - name: Create patch status report
       lineinfile:
         path: "{{ patch_status_file }}"
-        line: "Hostname: {{ inventory_hostname }}; Kernel: {{ kernel_version.stdout }}; File system status: {{ 'Passed' if free_space_check is succeeded else 'Failed' }}; Repo check: {{ 'Passed' if apt_update is succeeded else 'Failed' }}; Patch status: {{ 'Success' if apt_upgrade is succeeded else 'Failed' }}; Updated patches: {{ apt_upgrade.stdout_lines | default([]) }}; Reboot required: {{ 'Yes' if reboot_required.rc == 1 else 'No' }}"
+        line: "Hostname: {{ inventory_hostname }}; File system check: {{ 'success' if free_space_check is succeeded else 'Failed' }}; Repo check: {{ 'success' if apt_update is succeeded else 'Failed' }}; Patch update: {{ 'success' if apt_upgrade is succeeded else 'Failed' }}; List of patches updated: {{ apt_upgrade.stdout_lines | join(' ') | default('No patches available to update') }}; Reboot required: {{ 'yes' if reboot_required.rc == 1 else 'No' }}"
         create: yes
 
     - name: Handle failure cases
       lineinfile:
         path: "{{ patch_status_file }}"
-        line: "Hostname: {{ inventory_hostname }}; Kernel: {{ kernel_version.stdout }}; File system status: {{ 'Failed' if free_space_check is failed else 'Passed' }}; Repo check: {{ 'Failed' if apt_update is failed else 'Passed' }}; Patch status: Failed"
+        line: "Hostname: {{ inventory_hostname }}; File system check: {{ 'Failed' if free_space_check is failed else 'success' }}; Repo check: {{ 'Failed' if apt_update is failed else 'success' }}; Patch update: Failed; List of patches updated: none; Reboot required: No"
         create: yes
       when: free_space_check is failed or apt_update is failed or apt_upgrade is failed
       ignore_errors: yes
