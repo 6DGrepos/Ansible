@@ -7,6 +7,21 @@
     status_file: "/home/svc_aux/backup/patchstatus/filesystem_status.csv"
 
   tasks:
+    - name: Remove existing status file
+      ansible.builtin.file:
+        path: "{{ status_file }}"
+        state: absent
+      delegate_to: 10.1.34.26
+      run_once: true
+
+    - name: Create new status file with header
+      ansible.builtin.lineinfile:
+        path: "{{ status_file }}"
+        line: "hostname,status"
+        create: yes
+      delegate_to: 10.1.34.26
+      run_once: true
+
     - name: Initialize filesystem status
       set_fact:
         filesystem_status:
@@ -36,14 +51,6 @@
       set_fact:
         filesystem_status: "{{ filesystem_status | combine({'status': 'FAILED'}) }}"
       when: space_check is failed
-
-    - name: Ensure status file exists with header
-      ansible.builtin.lineinfile:
-        path: "{{ status_file }}"
-        line: "hostname,status"
-        create: yes
-      delegate_to: 10.1.34.26
-      run_once: true
 
     - name: Update filesystem status file
       ansible.builtin.lineinfile:
