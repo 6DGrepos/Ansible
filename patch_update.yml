@@ -39,6 +39,10 @@
       failed_when: "'Err' in apt_update.stderr"
       ignore_errors: yes
 
+    - name: Skip patching if checks failed
+      meta: end_play
+      when: free_space_check is failed or apt_update is failed
+
     - name: Patch the server
       apt:
         upgrade: dist
