@@ -1,6 +1,6 @@
 ---
 - name: Patch Ubuntu Servers with Filesystem Checks
-  hosts: ubuntu_servers
+  hosts: all
   become: yes
   vars:
     min_disk_space_mb: 1000  # Minimum required disk space in MB
