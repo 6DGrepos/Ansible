@@ -1,6 +1,6 @@
 ---
 - name: Update Ubuntu servers
-  hosts: all
+  hosts: ubuntu_servers
   become: yes
   vars:
     min_space_mb: 500
@@ -57,13 +57,12 @@
     - name: Set repo check status
       set_fact:
         patch_status: "{{ patch_status | combine({'repo_check': 'SUCCESS'}) }}"
-      when: apt_update_result is success and apt_check_result.rc == 0
+      when: apt_update_result is success or apt_check_result.rc == 0
 
     - name: Perform system upgrade
       ansible.builtin.apt:
         upgrade: dist
       register: upgrade_result
-      when: apt_update_result is success
       ignore_errors: yes
 
     - name: Set patch update status and list
