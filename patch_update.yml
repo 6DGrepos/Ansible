@@ -1,6 +1,6 @@
 ---
 - name: Patch Ubuntu Servers with Filesystem Checks
-  hosts: all
+  hosts: ubuntu_servers
   become: yes
   vars:
     min_disk_space_mb: 1000  # Minimum required disk space in MB
@@ -8,19 +8,20 @@
     csv_header: "Hostname,File system check,Repo check,Patch update,List of patches updated,Reboot required\n"
 
   tasks:
-    - name: Ensure CSV file exists and has a header
+    - name: Ensure CSV file exists with header if missing
       block:
-        - name: Check if CSV file already has the header
-          shell: "head -n 1 {{ csv_file_path }} | grep -q 'Hostname'"
+        - name: Check if CSV file exists and has the header
+          shell: "grep -q '^Hostname' {{ csv_file_path }} || echo 'missing'"
           register: csv_header_check
-          ignore_errors: yes
+          changed_when: false
 
         - name: Add header if not present
-          copy:
-            dest: "{{ csv_file_path }}"
-            content: "{{ csv_header }}"
-            force: no
-          when: csv_header_check.failed
+          lineinfile:
+            path: "{{ csv_file_path }}"
+            line: "{{ csv_header.strip() }}"
+            create: yes
+            insertafter: EOF
+          when: csv_header_check.stdout == "missing"
 
     - name: Check root disk space
       shell: "df --output=avail / | tail -n 1"
@@ -64,18 +65,17 @@
       register: reboot_required
       changed_when: false
 
-    - name: Record patch status to CSV file
-      lineinfile:
-        path: "{{ csv_file_path }}"
-        create: yes
-        line: |
-          {{ inventory_hostname }},
-          {{ (root_disk_space.stdout | int >= min_disk_space_mb) and
-              (var_disk_space.stdout | int >= min_disk_space_mb) and
-              (boot_disk_space.stdout | int >= min_disk_space_mb) | ternary('SUCCESS', 'FAILED') }},
-          {{ repo_status.rc == 0 | ternary('SUCCESS', 'FAILED') }},
-          {{ patch_result is succeeded | ternary('SUCCESS', 'FAILED') }},
-          {{ patch_list.stdout_lines | join(', ') | default('No patches available') }},
-          {{ reboot_required.stdout.strip() | default('no') }}
-      backup: no
-      state: present
+    - name: Create patch status report template
+      template:
+        src: patch_status_template.j2
+        dest: /tmp/patch_status_report.txt
+
+    - name: Append patch status to CSV
+      copy:
+        src: /tmp/patch_status_report.txt
+        dest: "{{ csv_file_path }}"
+        remote_src: yes
+        mode: '0644'
+        append: yes
+
+---
