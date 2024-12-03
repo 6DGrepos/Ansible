@@ -1,6 +1,6 @@
 ---
 - name: Check Repository Status
-  hosts: ubuntu_servers
+  hosts: all
   become: yes
   vars:
     status_file: "/home/svc_aux/backup/patchstatus/repo_status.csv"
