@@ -39,6 +39,18 @@
       failed_when: "'Err' in apt_update.stderr"
       ignore_errors: yes
 
+    - name: Gather patch status
+      shell: uname -r
+      register: kernel_version
+
+    - name: Create patch status report for failed checks
+      lineinfile:
+        path: "{{ patch_status_file }}"
+        line: "Hostname,File system check,Repo check,Patch update,List of patches updated,Reboot required\n{{ inventory_hostname }},{{ 'Failed' if free_space_check is failed else 'success' }},{{ 'Failed' if apt_update is failed else 'success' }},Failed,none,No"
+        create: yes
+      when: free_space_check is failed or apt_update is failed
+      ignore_errors: yes
+
     - name: Skip patching if checks failed
       meta: end_play
       when: free_space_check is failed or apt_update is failed
@@ -57,20 +69,10 @@
       when: apt_upgrade is succeeded
       ignore_errors: yes
 
-    - name: Gather patch status
-      shell: uname -r
-      register: kernel_version
-
-    - name: Create patch status report
+    - name: Create patch status report for successful checks
       lineinfile:
         path: "{{ patch_status_file }}"
-        line: "Hostname: {{ inventory_hostname }}; File system check: {{ 'success' if free_space_check is succeeded else 'Failed' }}; Repo check: {{ 'success' if apt_update is succeeded else 'Failed' }}; Patch update: {{ 'success' if apt_upgrade is succeeded else 'Failed' }}; List of patches updated: {{ apt_upgrade.stdout_lines | join(' ') | default('No patches available to update') }}; Reboot required: {{ 'yes' if reboot_required.rc == 1 else 'No' }}"
+        line: "{{ inventory_hostname }},success,success,{{ 'success' if apt_upgrade is succeeded else 'Failed' }},{{ apt_upgrade.stdout_lines | join(' ') | default('No patches available to update') }},{{ 'yes' if reboot_required.rc == 1 else 'No' }}"
         create: yes
-
-    - name: Handle failure cases
-      lineinfile:
-        path: "{{ patch_status_file }}"
-        line: "Hostname: {{ inventory_hostname }}; File system check: {{ 'Failed' if free_space_check is failed else 'success' }}; Repo check: {{ 'Failed' if apt_update is failed else 'success' }}; Patch update: Failed; List of patches updated: none; Reboot required: No"
-        create: yes
-      when: free_space_check is failed or apt_update is failed or apt_upgrade is failed
+      when: free_space_check is succeeded and apt_update is succeeded and apt_upgrade is succeeded and reboot_required is succeeded
       ignore_errors: yes
