@@ -2,39 +2,40 @@
 - name: Patch Ubuntu servers
   hosts: all
   gather_facts: yes
+  become: yes
   tasks:
     - name: Check free space on root filesystem
-      command: df -h /
+      command: df -BG /
       register: fs_root
       failed_when: false
       changed_when: false
 
     - name: Check if root filesystem has sufficient space
       set_fact:
-        fs_check_status_root: "{{ 'passed' if (fs_root.stdout | regex_search('(\d+\.?\d*)G') | int) >= 2 else 'failed' }}"
+        fs_check_status_root: "{{ 'passed' if (fs_root.stdout | regex_search('(\d+)G') | int) >= 2 else 'failed' }}"
 
     - name: Check free space on /boot filesystem
-      command: df -h /boot
+      command: df -BG /boot
       register: fs_boot
       failed_when: false
       changed_when: false
 
     - name: Check if /boot filesystem has sufficient space
       set_fact:
-        fs_check_status_boot: "{{ 'passed' if (fs_boot.stdout | regex_search('(\d+\.?\d*)G') | int) >= 1 else 'failed' }}"
+        fs_check_status_boot: "{{ 'passed' if (fs_boot.stdout | regex_search('(\d+)G') | int) >= 1 else 'failed' }}"
 
     - name: Check free space on /var filesystem
-      command: df -h /var
+      command: df -BG /var
       register: fs_var
       failed_when: false
       changed_when: false
 
     - name: Check if /var filesystem has sufficient space
       set_fact:
-        fs_check_status_var: "{{ 'passed' if (fs_var.stdout | regex_search('(\d+\.?\d*)G') | int) >= 2 else 'failed' }}"
+        fs_check_status_var: "{{ 'passed' if (fs_var.stdout | regex_search('(\d+)G') | int) >= 2 else 'failed' }}"
 
     - name: Check if apt repositories are valid
-      command: apt update -y
+      command: apt update
       register: apt_check
       failed_when: false
       changed_when: false
@@ -55,19 +56,24 @@
 
     - name: List the patches that are updated
       set_fact:
-        updated_patches: "{{ patch_list.stdout | regex_findall('([a-zA-Z0-9\-\.]+)') }}"  # Adjust the regex as per the format
+        updated_patches: "{{ patch_list.stdout | regex_findall('([a-zA-Z0-9\-\.]+)') }}"
       when: patch_status == 'success'
 
+    - name: Patch the server
+      apt:
+        upgrade: dist
+        update_cache: yes
+
     - name: Check if reboot is required
-      command: needs-restarting
+      command: checkrestart
       register: reboot_check
       failed_when: false
       changed_when: false
       ignore_errors: yes
 
-    - name: Set reboot status (only if reboot_check.stdout is defined)
+    - name: Set reboot status
       set_fact:
-        reboot_required: "{{ 'yes' if reboot_check.stdout and 'Reboot required' in reboot_check.stdout else 'no' }}"
+        reboot_required: "{{ 'yes' if reboot_check.stdout and 'Found' in reboot_check.stdout else 'no' }}"
 
     - name: Collect all status and save to a file
       block:
