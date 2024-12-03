@@ -1,77 +1,47 @@
 ---
-- name: Patch Ubuntu Servers with Filesystem Checks
-  hosts: all
-  gather_facts: yes
+- name: Update Ubuntu servers
+  hosts: ubuntu_servers
+  become: yes
+  vars:
+    min_space_mb: 500
+
   tasks:
-    - name: Ensure 'needrestart' is installed (Ubuntu-based)
-      apt:
-        name: needrestart
-        state: present
-      when: ansible_os_family == 'Debian'
+    - name: Check available space in filesystems
+      ansible.builtin.shell: df -m {{ item }} | awk 'NR==2 {print $4}'
+      register: available_space
+      loop:
+        - /
+        - /boot
+        - /var
+      
+    - name: Verify sufficient space
+      ansible.builtin.assert:
+        that: "{{ available_space.results[item.0].stdout|int }} >= {{ min_space_mb }}"
+        fail_msg: "Insufficient space in {{ item.1 }}"
+      loop: "{{ available_space.results|enumerate }}"
+      loop_control:
+        label: "{{ item.1 }}"
 
-    - name: Remove previous CSV content (if exists)
-      file:
-        path: /tmp/patch_status_report.csv
-        state: absent
-
-    - name: Create a new CSV file with headers
-      copy:
-        content: |
-          Hostname, File system check, Repo check, Patch update, List of patches updated, Reboot required
-        dest: /tmp/patch_status_report.csv
-        mode: '0644'
-
-    - name: Check disk space for root
-      command: df -h /
-      register: root_disk_space
-      ignore_errors: yes
-
-    - name: Check disk space for /var
-      command: df -h /var
-      register: var_disk_space
-      ignore_errors: yes
-
-    - name: Check disk space for /boot
-      command: df -h /boot
-      register: boot_disk_space
-      ignore_errors: yes
-
-    - name: Check if repository is up to date
-      apt:
+    - name: Update apt cache
+      ansible.builtin.apt:
         update_cache: yes
-      register: repo_status
-      ignore_errors: yes
 
-    - name: Perform system update
-      apt:
+    - name: Check if repos are up-to-date and valid
+      ansible.builtin.command: apt-get update
+      register: apt_update_result
+      changed_when: false
+      failed_when: apt_update_result.rc != 0
+
+    - name: Perform system upgrade
+      ansible.builtin.apt:
         upgrade: dist
-      register: patch_result
-      ignore_errors: yes
+      register: upgrade_result
 
-    - name: Check if reboot is required (Ubuntu)
-      command: needrestart -r
+    - name: Check if reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
       register: reboot_required
-      when: ansible_os_family == 'Debian'
-      ignore_errors: yes
 
-    - name: Check if reboot is required (RHEL/CentOS)
-      command: needs-restarting
-      register: reboot_required
-      when: ansible_os_family == 'RedHat'
-      ignore_errors: yes
-
-    - name: Ensure that variables are defined before appending to CSV
-      set_fact:
-        root_disk_status: "{{ 'SUCCESS' if root_disk_space.rc == 0 else 'FAILED' }}"
-        var_disk_status: "{{ 'SUCCESS' if var_disk_space.rc == 0 else 'FAILED' }}"
-        boot_disk_status: "{{ 'SUCCESS' if boot_disk_space.rc == 0 else 'FAILED' }}"
-        repo_status_check: "{{ 'SUCCESS' if repo_status.rc == 0 else 'FAILED' }}"
-        patch_update_status: "{{ 'SUCCESS' if patch_result.rc == 0 else 'FAILED' }}"
-        patches_updated: "{{ patch_result.stdout_lines | join(', ') | default('No patches available') }}"
-        reboot_required_status: "{{ 'yes' if reboot_required.stdout | search('NEEDRESTART-KSTA') else 'no' }}"
-
-    - name: Append patch status to CSV file
-      lineinfile:
-        path: /tmp/patch_status_report.csv
-        line: "{{ inventory_hostname }}, {{ root_disk_status }}, {{ var_disk_status }}, {{ boot_disk_status }}, {{ repo_status_check }}, {{ patch_update_status }}, {{ patches_updated }}, {{ reboot_required_status }}"
-        create: yes
+    - name: Display reboot status
+      ansible.builtin.debug:
+        msg: "Reboot is {{ 'required' if reboot_required.stat.exists else 'not required' }}"
