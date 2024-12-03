@@ -37,7 +37,8 @@
       ignore_errors: yes
 
     - name: Check if repository is up to date
-      command: apt-get update
+      apt:
+        update_cache: yes
       register: repo_status
       ignore_errors: yes
 
