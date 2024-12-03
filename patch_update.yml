@@ -74,10 +74,31 @@
         msg: "No apt processes were killed"
       when: pkill_result.rc != 0
 
+    - name: Clear apt locks
+      file:
+        path: /var/lib/dpkg/lock
+        state: absent
+      ignore_errors: yes
+
+    - name: Clear apt lock frontend
+      file:
+        path: /var/lib/dpkg/lock-frontend
+        state: absent
+      ignore_errors: yes
+
+    - name: Clear apt daily lock
+      file:
+        path: /var/lib/apt/daily_lock
+        state: absent
+      ignore_errors: yes
+
     - name: Patch the server
       apt:
         upgrade: dist
         update_cache: yes
+      retries: 3
+      delay: 5
+      until: result is success
 
     - name: Check if reboot is required
       command: checkrestart
