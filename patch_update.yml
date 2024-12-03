@@ -1,6 +1,6 @@
 ---
 - name: Check Filesystem and Repository Status
-  hosts: ubuntu_servers
+  hosts: all
   become: yes
   vars:
     min_space_mb: 500
