@@ -4,6 +4,11 @@
   gather_facts: yes
   become: yes
   tasks:
+    - name: Ensure checkrestart is installed
+      apt:
+        name: debian-goodies
+        state: present
+
     - name: Check free space on root filesystem
       command: df -BG /
       register: fs_root
@@ -58,6 +63,10 @@
       set_fact:
         updated_patches: "{{ patch_list.stdout | regex_findall('([a-zA-Z0-9\\-\\.]+)') }}"
       when: patch_status == 'success'
+
+    - name: Kill any existing apt processes
+      command: pkill -f apt
+      ignore_errors: yes
 
     - name: Patch the server
       apt:
