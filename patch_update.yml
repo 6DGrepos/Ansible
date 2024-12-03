@@ -16,7 +16,7 @@
     - name: Create new status file with header
       ansible.builtin.lineinfile:
         path: "{{ status_file }}"
-        line: "hostname,status"
+        line: "hostname,status,details"
         create: yes
       delegate_to: 10.1.34.26
       run_once: true
@@ -26,6 +26,7 @@
         repo_status:
           hostname: "{{ inventory_hostname }}"
           status: "SUCCESS"
+          details: "No issues detected"
 
     - name: Update apt cache
       ansible.builtin.apt:
@@ -43,13 +44,16 @@
 
     - name: Set repository check status
       set_fact:
-        repo_status: "{{ repo_status | combine({'status': 'FAILED'}) }}"
-      when: apt_update_result is failed and apt_check_result.rc != 0
+        repo_status: "{{ repo_status | combine({
+          'status': 'FAILED',
+          'details': apt_update_result.msg if apt_update_result is failed else apt_check_result.stderr
+        }) }}"
+      when: apt_update_result is failed or apt_check_result.rc != 0
 
     - name: Update repository status file
       ansible.builtin.lineinfile:
         path: "{{ status_file }}"
-        line: "{{ repo_status.hostname }},{{ repo_status.status }}"
+        line: "{{ repo_status.hostname }},{{ repo_status.status }},{{ repo_status.details | replace(',', ';') }}"
         insertafter: EOF
       delegate_to: 10.1.34.26
 
