@@ -1,10 +1,9 @@
 ---
-- name: Check File System Space
-  hosts: all
+- name: Check Repository Status
+  hosts: ubuntu_servers
   become: yes
   vars:
-    min_space_mb: 500
-    status_file: "/home/svc_aux/backup/patchstatus/filesystem_status.csv"
+    status_file: "/home/svc_aux/backup/patchstatus/repo_status.csv"
 
   tasks:
     - name: Remove existing status file
@@ -22,43 +21,38 @@
       delegate_to: 10.1.34.26
       run_once: true
 
-    - name: Initialize filesystem status
+    - name: Initialize repository status
       set_fact:
-        filesystem_status:
+        repo_status:
           hostname: "{{ inventory_hostname }}"
           status: "SUCCESS"
 
-    - name: Check available space in filesystems
-      ansible.builtin.shell: df -m {{ item }} | awk 'NR==2 {print $4}'
-      register: available_space
-      loop:
-        - /
-        - /boot
-        - /var
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+      register: apt_update_result
       ignore_errors: yes
 
-    - name: Verify sufficient space
-      ansible.builtin.assert:
-        that: "{{ item.stdout|int }} >= {{ min_space_mb }}"
-        fail_msg: "Insufficient space in {{ item.item }}"
-      loop: "{{ available_space.results }}"
-      loop_control:
-        label: "{{ item.item }}"
-      register: space_check
-      ignore_errors: yes
+    - name: Check if repos are up-to-date and valid
+      ansible.builtin.command: apt-get update
+      args:
+        warn: false
+      register: apt_check_result
+      changed_when: false
+      failed_when: false
 
-    - name: Set filesystem check status
+    - name: Set repository check status
       set_fact:
-        filesystem_status: "{{ filesystem_status | combine({'status': 'FAILED'}) }}"
-      when: space_check is failed
+        repo_status: "{{ repo_status | combine({'status': 'FAILED'}) }}"
+      when: apt_update_result is failed and apt_check_result.rc != 0
 
-    - name: Update filesystem status file
+    - name: Update repository status file
       ansible.builtin.lineinfile:
         path: "{{ status_file }}"
-        line: "{{ filesystem_status.hostname }},{{ filesystem_status.status }}"
+        line: "{{ repo_status.hostname }},{{ repo_status.status }}"
         insertafter: EOF
       delegate_to: 10.1.34.26
 
-    - name: Display filesystem status
+    - name: Display repository status
       ansible.builtin.debug:
-        var: filesystem_status
+        var: repo_status
