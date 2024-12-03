@@ -6,7 +6,7 @@
     patch_status_file: "/home/svc_aux/backup/patchstatus/patchstatus.out"
     min_free_space_mb: 500  # Minimum free space required in MB
   tasks:
-    - name: Check free space on /, /boot, and /var
+    - name: Check free space on /
       command: df -m --output=avail /
       register: root_fs
       changed_when: false
@@ -24,11 +24,11 @@
     - name: Validate free space
       fail:
         msg: "Insufficient free space on {{ item.mount }}"
-      when: item.avail < min_free_space_mb
+      when: item.avail | int < min_free_space_mb
       with_items:
-        - { mount: '/', avail: "{{ root_fs.stdout_lines[1] | int }}" }
-        - { mount: '/boot', avail: "{{ boot_fs.stdout_lines[1] | int }}" }
-        - { mount: '/var', avail: "{{ var_fs.stdout_lines[1] | int }}" }
+        - { mount: '/', avail: "{{ root_fs.stdout_lines[1] }}" }
+        - { mount: '/boot', avail: "{{ boot_fs.stdout_lines[1] }}" }
+        - { mount: '/var', avail: "{{ var_fs.stdout_lines[1] }}" }
 
     - name: Check if all repositories are valid
       command: apt-get update
