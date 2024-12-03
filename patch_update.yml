@@ -1,9 +1,10 @@
 ---
-- name: Check Repository Status
+- name: Check Filesystem and Repository Status
   hosts: all
   become: yes
   vars:
-    status_file: "/home/svc_aux/backup/patchstatus/repo_status.csv"
+    min_space_mb: 500
+    status_file: "/home/svc_aux/backup/patchstatus/system_status.csv"
 
   tasks:
     - name: Remove existing status file
@@ -16,18 +17,49 @@
     - name: Create new status file with header
       ansible.builtin.lineinfile:
         path: "{{ status_file }}"
-        line: "hostname,status,details"
+        line: "hostname,filesystem_status,filesystem_details,repo_status,repo_details"
         create: yes
       delegate_to: 10.1.34.26
       run_once: true
 
-    - name: Initialize repository status
+    - name: Initialize status
       set_fact:
-        repo_status:
+        system_status:
           hostname: "{{ inventory_hostname }}"
-          status: "SUCCESS"
-          details: "No issues detected"
+          filesystem_status: "SUCCESS"
+          filesystem_details: "All filesystems have sufficient space"
+          repo_status: "SUCCESS"
+          repo_details: "No issues detected"
 
+    # Filesystem Check
+    - name: Check available space in filesystems
+      ansible.builtin.shell: df -m {{ item }} | awk 'NR==2 {print $4}'
+      register: available_space
+      loop:
+        - /
+        - /boot
+        - /var
+      ignore_errors: yes
+
+    - name: Verify sufficient space
+      ansible.builtin.assert:
+        that: "{{ item.stdout|int }} >= {{ min_space_mb }}"
+        fail_msg: "Insufficient space in {{ item.item }}"
+      loop: "{{ available_space.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      register: space_check
+      ignore_errors: yes
+
+    - name: Set filesystem check status
+      set_fact:
+        system_status: "{{ system_status | combine({
+          'filesystem_status': 'FAILED',
+          'filesystem_details': 'Insufficient space in ' + (space_check.results | selectattr('failed', 'true') | map(attribute='item') | join(', '))
+        }) }}"
+      when: space_check is failed
+
+    # Repository Check
     - name: Update apt cache
       ansible.builtin.apt:
         update_cache: yes
@@ -44,19 +76,20 @@
 
     - name: Set repository check status
       set_fact:
-        repo_status: "{{ repo_status | combine({
-          'status': 'FAILED',
-          'details': apt_update_result.msg if apt_update_result is failed else apt_check_result.stderr
+        system_status: "{{ system_status | combine({
+          'repo_status': 'FAILED',
+          'repo_details': apt_update_result.msg if apt_update_result is failed else apt_check_result.stderr
         }) }}"
       when: apt_update_result is failed or apt_check_result.rc != 0
 
-    - name: Update repository status file
+    # Update Status File
+    - name: Update status file
       ansible.builtin.lineinfile:
         path: "{{ status_file }}"
-        line: "{{ repo_status.hostname }},{{ repo_status.status }},{{ repo_status.details | replace(',', ';') }}"
+        line: "{{ system_status.hostname }},{{ system_status.filesystem_status }},{{ system_status.filesystem_details | replace(',', ';') }},{{ system_status.repo_status }},{{ system_status.repo_details | replace(',', ';') }}"
         insertafter: EOF
       delegate_to: 10.1.34.26
 
-    - name: Display repository status
+    - name: Display system status
       ansible.builtin.debug:
-        var: repo_status
+        var: system_status
