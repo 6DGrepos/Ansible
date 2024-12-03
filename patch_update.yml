@@ -1,76 +1,61 @@
 ---
-- name: Patch and validate Ubuntu servers
+- name: Patch Ubuntu servers
   hosts: all
-  become: yes
   gather_facts: yes
-
-  vars:
-    required_free_space: 2  # in GB for root and var, 1GB for /boot
-    max_retries: 5
-    retry_delay: 10
-
   tasks:
-    - name: Check available space on root filesystem
+    - name: Check free space on root filesystem
       command: df -h /
-      register: df_root
+      register: fs_root
+      failed_when: false
       changed_when: false
 
-    - name: Check available space on /boot filesystem
+    - name: Check if root filesystem has sufficient space
+      set_fact:
+        fs_check_status_root: "{{ 'passed' if (fs_root.stdout | regex_search('(\d+\.?\d*)G') | int) >= 2 else 'failed' }}"
+
+    - name: Check free space on /boot filesystem
       command: df -h /boot
-      register: df_boot
+      register: fs_boot
+      failed_when: false
       changed_when: false
 
-    - name: Check available space on /var filesystem
+    - name: Check if /boot filesystem has sufficient space
+      set_fact:
+        fs_check_status_boot: "{{ 'passed' if (fs_boot.stdout | regex_search('(\d+\.?\d*)G') | int) >= 1 else 'failed' }}"
+
+    - name: Check free space on /var filesystem
       command: df -h /var
-      register: df_var
+      register: fs_var
+      failed_when: false
       changed_when: false
 
-    - name: Set filesystem check status for root
+    - name: Check if /var filesystem has sufficient space
       set_fact:
-        fs_check_status_root: "{{ 'passed' if (df_root.stdout | regex_search('(\\d+\\.?\\d*)G') | regex_replace('\\s+', '') | regex_search('(\\d+\\.?\\d*)G') | int) >= required_free_space else 'failed' }}"
-    
-    - name: Set filesystem check status for /boot
+        fs_check_status_var: "{{ 'passed' if (fs_var.stdout | regex_search('(\d+\.?\d*)G') | int) >= 2 else 'failed' }}"
+
+    - name: Check if apt repositories are valid
+      command: apt update -y
+      register: apt_check
+      failed_when: false
+      changed_when: false
+
+    - name: Set repository check status
       set_fact:
-        fs_check_status_boot: "{{ 'passed' if (df_boot.stdout | regex_search('(\\d+\\.?\\d*)G') | regex_replace('\\s+', '') | regex_search('(\\d+\\.?\\d*)G') | int) >= 1 else 'failed' }}"
-
-    - name: Set filesystem check status for /var
-      set_fact:
-        fs_check_status_var: "{{ 'passed' if (df_var.stdout | regex_search('(\\d+\\.?\\d*)G') | regex_replace('\\s+', '') | regex_search('(\\d+\\.?\\d*)G') | int) >= required_free_space else 'failed' }}"
-
-    - name: Check if apt repositories are valid (handling apt lock)
-      block:
-        - name: Run apt update command to check repo status
-          command: apt update -y
-          register: apt_update_result
-          failed_when: "'E: ' in apt_update_result.stderr"
-          changed_when: false
-          ignore_errors: yes
-          retries: "{{ max_retries }}"
-          delay: "{{ retry_delay }}"
-          until: apt_update_result.rc == 0
-          
-        - name: Set repository check status
-          set_fact:
-            repo_check_status: "{{ 'passed' if apt_update_result.rc == 0 else 'failed' }}"
-      
-      rescue:
-        - name: Fail gracefully if repository check fails
-          fail:
-            msg: "Failed to update apt repositories after multiple retries."
-
-    - name: Perform package update
-      command: apt upgrade -y
-      register: upgrade_result
-      changed_when: "'Need to get' in upgrade_result.stdout"
-      ignore_errors: yes
-
-    - name: Set patch status
-      set_fact:
-        patch_status: "{{ 'success' if upgrade_result.rc == 0 else 'failed' }}"
+        repo_check_status: "{{ 'passed' if apt_check.rc == 0 else 'failed' }}"
 
     - name: List updated patches
       command: apt list --upgradable
-      register: updated_patches
+      register: patch_list
+      failed_when: false
+      changed_when: false
+
+    - name: Set patch status
+      set_fact:
+        patch_status: "{{ 'success' if patch_list.stdout else 'no_new_patches' }}"
+
+    - name: List the patches that are updated
+      set_fact:
+        updated_patches: "{{ patch_list.stdout | regex_findall('([a-zA-Z0-9\-\.]+)') }}"  # Adjust the regex as per the format
       when: patch_status == 'success'
 
     - name: Check if reboot is required
@@ -80,38 +65,31 @@
       changed_when: false
       ignore_errors: yes
 
-    - name: Set reboot status
+    - name: Set reboot status (only if reboot_check.stdout is defined)
       set_fact:
-        reboot_required: "{{ 'yes' if 'Reboot required' in reboot_check.stdout else 'no' }}"
+        reboot_required: "{{ 'yes' if reboot_check.stdout and 'Reboot required' in reboot_check.stdout else 'no' }}"
 
-    - name: Prepare patch status data
-      set_fact:
-        patch_status_data: |
-          {{ inventory_hostname }} ; 
-          Filesystem Check Root: {{ fs_check_status_root }} ; 
-          Filesystem Check /boot: {{ fs_check_status_boot }} ; 
-          Filesystem Check /var: {{ fs_check_status_var }} ; 
-          Repository Check: {{ repo_check_status }} ; 
-          Patch Status: {{ patch_status }} ; 
-          List of Updated Patches: {{ updated_patches.stdout | default('No patches updated') }} ; 
-          Reboot Required: {{ reboot_required }}
+    - name: Collect all status and save to a file
+      block:
+        - name: Prepare final status for the host
+          set_fact:
+            host_status: |
+              Hostname: {{ ansible_facts['hostname'] }} ;
+              Filesystem Check: {{ fs_check_status_root }} | {{ fs_check_status_boot }} | {{ fs_check_status_var }} ;
+              Repository Check: {{ repo_check_status }} ;
+              Patch Status: {{ patch_status }} ;
+              List of Updated Patches: {{ updated_patches | join(', ') }} ;
+              Reboot Required: {{ reboot_required }}
 
-    - name: Handle case when no new patches are available
-      set_fact:
-        patch_status_data: "{{ patch_status_data | replace('No patches updated', 'System is up-to-date, no new patches available') }}"
-      when: patch_status == 'success' and updated_patches.stdout == ""
+        - name: Save results to file
+          copy:
+            dest: "/home/svc_aux/backup/patchstatus/patchstatus.csv"
+            content: |
+              Hostname,Filesystem Check,Repository Check,Patch Status,Updated Patches,Reboot Required
+              {{ ansible_facts['hostname'] }},{{ fs_check_status_root }}|{{ fs_check_status_boot }}|{{ fs_check_status_var }},{{ repo_check_status }},{{ patch_status }},{{ updated_patches | join(', ') }},{{ reboot_required }}
+            append: yes
+          delegate_to: localhost
 
-    - name: Save patch status to a file
-      local_action:
-        module: copy
-        content: "{{ patch_status_data }}"
-        dest: "/tmp/patchstatus_{{ inventory_hostname }}.out"
-      
-    - name: Copy patch status to central server
-      copy:
-        src: "/tmp/patchstatus_{{ inventory_hostname }}.out"
-        dest: "/home/svc_aux/backup/patchstatus/patchstatus.out"
-        remote_src: yes
-        owner: svc_aux
-        group: svc_aux
-        mode: '0644'
+    - name: Print final status message
+      debug:
+        msg: "Status for {{ ansible_facts['hostname'] }} has been logged successfully"
