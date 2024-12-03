@@ -7,11 +7,11 @@
     csv_file_path: "/home/svc_aux/backup/patchstatus/patch_status.csv"
 
   tasks:
-    - name: Ensure CSV file exists
-      file:
-        path: "{{ csv_file_path }}"
-        state: touch
-        mode: '0644'
+    - name: Ensure CSV file exists with header
+      copy:
+        dest: "{{ csv_file_path }}"
+        content: "Hostname,File system check,Repo check,Patch update,List of patches updated,Reboot required\n"
+        force: no
 
     - name: Check root disk space
       shell: "df --output=avail / | tail -n 1"
@@ -36,7 +36,7 @@
       register: repo_status
       ignore_errors: yes
 
-    - name: Apply patches
+    - name: Apply patches and list changes
       apt:
         upgrade: dist
       register: patch_result
@@ -47,19 +47,27 @@
         - boot_disk_space.stdout | int >= min_disk_space_mb
         - repo_status.rc == 0
 
+    - name: Get list of updated packages
+      shell: "apt list --upgradable"
+      register: patch_list
+      changed_when: false
+      when: patch_result is succeeded
+
     - name: Check if reboot is required
       shell: "if [ -f /var/run/reboot-required ]; then echo yes; else echo no; fi"
       register: reboot_required
       changed_when: false
 
     - name: Record patch status to CSV file
-      shell: |
-        echo "{{ inventory_hostname }},
-        Root_Disk: {{ root_disk_space.stdout.strip() | int >= min_disk_space_mb | ternary('SUCCESS', 'FAILED') }},
-        Var_Disk: {{ var_disk_space.stdout.strip() | int >= min_disk_space_mb | ternary('SUCCESS', 'FAILED') }},
-        Boot_Disk: {{ boot_disk_space.stdout.strip() | int >= min_disk_space_mb | ternary('SUCCESS', 'FAILED') }},
-        Repo_Status: {{ repo_status.rc == 0 | ternary('SUCCESS', 'FAILED') }},
-        Patch_Status: {{ patch_result is failed | ternary('FAILED', 'SUCCESS') }},
-        Reboot_Required: {{ reboot_required.stdout.strip() }},
-        Message: {{ patch_result.msg | default('') }}" >> {{ csv_file_path }}
-      ignore_errors: no
+      lineinfile:
+        path: "{{ csv_file_path }}"
+        create: yes
+        line: |
+          {{ inventory_hostname }},
+          {{ (root_disk_space.stdout | int >= min_disk_space_mb) and
+              (var_disk_space.stdout | int >= min_disk_space_mb) and
+              (boot_disk_space.stdout | int >= min_disk_space_mb) | ternary('SUCCESS', 'FAILED') }},
+          {{ repo_status.rc == 0 | ternary('SUCCESS', 'FAILED') }},
+          {{ patch_result is succeeded | ternary('SUCCESS', 'FAILED') }},
+          {{ patch_list.stdout_lines | join(', ') }},
+          {{ reboot_required.stdout.strip() }}
