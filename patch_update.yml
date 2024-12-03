@@ -57,7 +57,7 @@
           'filesystem_status': 'FAILED',
           'filesystem_details': 'Insufficient space in ' + (space_check.results | selectattr('failed', 'true') | map(attribute='item') | join(', '))
         }) }}"
-      when: space_check is failed
+      when: space_check.failed
 
     # Repository Check
     - name: Update apt cache
@@ -78,17 +78,25 @@
       set_fact:
         system_status: "{{ system_status | combine({
           'repo_status': 'FAILED',
-          'repo_details': apt_update_result.msg if apt_update_result is failed else apt_check_result.stderr
+          'repo_details': apt_update_result.msg if apt_update_result is failed else (apt_check_result.stderr if apt_check_result.rc != 0 else 'No issues detected')
         }) }}"
       when: apt_update_result is failed or apt_check_result.rc != 0
 
     # Update Status File
+    - name: Collect all host statuses
+      set_fact:
+        all_host_statuses: "{{ all_host_statuses | default([]) + [system_status] }}"
+      run_once: true
+      delegate_to: localhost
+
     - name: Update status file
       ansible.builtin.lineinfile:
         path: "{{ status_file }}"
-        line: "{{ system_status.hostname }},{{ system_status.filesystem_status }},{{ system_status.filesystem_details | replace(',', ';') }},{{ system_status.repo_status }},{{ system_status.repo_details | replace(',', ';') }}"
+        line: "{{ item.hostname }},{{ item.filesystem_status }},{{ item.filesystem_details | replace(',', ';') }},{{ item.repo_status }},{{ item.repo_details | replace(',', ';') }}"
         insertafter: EOF
       delegate_to: 10.1.34.26
+      run_once: true
+      loop: "{{ all_host_statuses }}"
 
     - name: Display system status
       ansible.builtin.debug:
