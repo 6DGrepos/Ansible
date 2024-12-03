@@ -25,23 +25,37 @@
     - name: Update apt cache
       ansible.builtin.apt:
         update_cache: yes
+      register: apt_update_result
+      ignore_errors: yes
+
+    - name: Display apt update error
+      ansible.builtin.debug:
+        msg: "Failed to update apt cache: {{ apt_update_result.msg }}"
+      when: apt_update_result is failed
 
     - name: Check if repos are up-to-date and valid
       ansible.builtin.command: apt-get update
-      register: apt_update_result
+      register: apt_check_result
       changed_when: false
-      failed_when: apt_update_result.rc != 0
+      failed_when: false
+
+    - name: Display repo check results
+      ansible.builtin.debug:
+        msg: "Repo check result: {{ apt_check_result.stdout_lines }}"
 
     - name: Perform system upgrade
       ansible.builtin.apt:
         upgrade: dist
       register: upgrade_result
+      when: apt_update_result is success
 
     - name: Check if reboot is required
       ansible.builtin.stat:
         path: /var/run/reboot-required
       register: reboot_required
+      when: upgrade_result is defined and upgrade_result is success
 
     - name: Display reboot status
       ansible.builtin.debug:
-        msg: "Reboot is {{ 'required' if reboot_required.stat.exists else 'not required' }}"
+        msg: "Reboot is {{ 'required' if reboot_required.stat.exists|default(false) else 'not required' }}"
+      when: reboot_required is defined
