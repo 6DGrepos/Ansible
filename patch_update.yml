@@ -29,24 +29,29 @@
         - { mount: '/', avail: "{{ root_fs.stdout_lines[1] }}" }
         - { mount: '/boot', avail: "{{ boot_fs.stdout_lines[1] }}" }
         - { mount: '/var', avail: "{{ var_fs.stdout_lines[1] }}" }
+      ignore_errors: yes
+      register: free_space_check
 
     - name: Check if all repositories are valid
       command: apt-get update
       register: apt_update
       changed_when: false
-      failed_when: "'Err' in apt_update.stdout"
+      failed_when: "'Err' in apt_update.stderr"
+      ignore_errors: yes
 
     - name: Patch the server
       apt:
         upgrade: dist
       register: apt_upgrade
       when: apt_update is succeeded
+      ignore_errors: yes
 
     - name: Check if reboot is required
       command: needs-restarting -r
       register: reboot_required
       changed_when: false
       when: apt_upgrade is succeeded
+      ignore_errors: yes
 
     - name: Gather patch status
       shell: uname -r
@@ -55,17 +60,13 @@
     - name: Create patch status report
       lineinfile:
         path: "{{ patch_status_file }}"
-        line: "Hostname: {{ inventory_hostname }}; Kernel: {{ kernel_version.stdout }}; File system status: Passed; Repo check: Passed; Patch status: Success; Updated patches: {{ apt_upgrade.stdout_lines }}; Reboot required: {{ 'Yes' if reboot_required.rc == 1 else 'No' }}"
+        line: "Hostname: {{ inventory_hostname }}; Kernel: {{ kernel_version.stdout }}; File system status: {{ 'Passed' if free_space_check is succeeded else 'Failed' }}; Repo check: {{ 'Passed' if apt_update is succeeded else 'Failed' }}; Patch status: {{ 'Success' if apt_upgrade is succeeded else 'Failed' }}; Updated patches: {{ apt_upgrade.stdout_lines | default([]) }}; Reboot required: {{ 'Yes' if reboot_required.rc == 1 else 'No' }}"
         create: yes
-      when: apt_upgrade is succeeded
 
     - name: Handle failure cases
       lineinfile:
         path: "{{ patch_status_file }}"
-        line: "Hostname: {{ inventory_hostname }}; Kernel: {{ kernel_version.stdout }}; File system status: {{ 'Failed' if item.failed else 'Passed' }}; Repo check: {{ 'Failed' if apt_update.failed else 'Passed' }}; Patch status: Failed"
+        line: "Hostname: {{ inventory_hostname }}; Kernel: {{ kernel_version.stdout }}; File system status: {{ 'Failed' if free_space_check is failed else 'Passed' }}; Repo check: {{ 'Failed' if apt_update is failed else 'Passed' }}; Patch status: Failed"
         create: yes
-      when: item.failed or apt_update.failed
-      with_items:
-        - { failed: root_fs.failed or boot_fs.failed or var_fs.failed }
-        - { failed: apt_update.failed }
+      when: free_space_check is failed or apt_update is failed or apt_upgrade is failed
       ignore_errors: yes
