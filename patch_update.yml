@@ -1,6 +1,6 @@
 ---
 - name: Check Filesystem, Repository Status, and Patch Servers
-  hosts: all
+  hosts: ubuntu_servers
   become: yes
   vars:
     min_space_mb: 500
@@ -30,6 +30,7 @@
           filesystem_details: "All filesystems have sufficient space"
           repo_status: "SUCCESS"
           repo_details: "No issues detected"
+          patch_status: "NOT CHECKED"
 
     # Filesystem Check
     - name: Check available space in filesystems
@@ -78,6 +79,17 @@
         }) }}"
       when: apt_update_result is failed or apt_check_result.rc != 0
 
+    # Check for available updates
+    - name: Check for available updates
+      ansible.builtin.apt:
+        update_cache: yes
+        upgrade: dist
+        dry_run: yes
+      register: update_check
+      when: 
+        - system_status.filesystem_status == "SUCCESS"
+        - system_status.repo_status == "SUCCESS"
+
     # Patch servers
     - name: Patch servers with successful checks
       ansible.builtin.apt:
@@ -86,13 +98,23 @@
       when: 
         - system_status.filesystem_status == "SUCCESS"
         - system_status.repo_status == "SUCCESS"
+        - update_check.changes|default({})|length > 0
       register: patch_result
+
+    # Set patch status
+    - name: Set patch status
+      set_fact:
+        system_status: "{{ system_status | combine({
+          'patch_status': 'PATCHED' if (patch_result is defined and patch_result.changed) 
+                          else 'NO UPDATES AVAILABLE' if (update_check.changes|default({})|length == 0) 
+                          else 'NOT PATCHED'
+        }) }}"
 
     # Update Status File
     - name: Update status file
       ansible.builtin.lineinfile:
         path: "{{ status_file }}"
-        line: "{{ system_status.hostname }},{{ system_status.filesystem_status }},{{ system_status.filesystem_details | replace(',', ';') }},{{ system_status.repo_status }},{{ system_status.repo_details | replace(',', ';') }},{{ 'PATCHED' if (patch_result is defined and patch_result.changed) else 'NOT PATCHED' }}"
+        line: "{{ system_status.hostname }},{{ system_status.filesystem_status }},{{ system_status.filesystem_details | replace(',', ';') }},{{ system_status.repo_status }},{{ system_status.repo_details | replace(',', ';') }},{{ system_status.patch_status }}"
         insertafter: EOF
       delegate_to: 10.1.34.26
 
