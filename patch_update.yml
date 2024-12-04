@@ -1,6 +1,6 @@
 ---
 - name: Check Filesystem, Repository Status, Patch Servers, and Check Reboot
-  hosts: ubuntu_servers
+  hosts: all
   become: yes
   vars:
     min_space_mb: 500
