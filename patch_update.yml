@@ -30,7 +30,7 @@
           filesystem_details: "All filesystems have sufficient space"
           repo_status: "SUCCESS"
           repo_details: "No issues detected"
-          patch_status: "NOT CHECKED"
+          patch_status: "NOT PATCHED"
 
     # Filesystem Check
     - name: Check available space in filesystems
@@ -79,38 +79,30 @@
         }) }}"
       when: apt_update_result is failed or apt_check_result.rc != 0
 
-    # Check for available updates
-    - name: Check for available updates
-      ansible.builtin.apt:
-        update_cache: yes
-        upgrade: dist
-        dry_run: yes
-      register: update_check
-      when: 
+    # Patch servers only if both checks pass
+    - name: Check for and apply updates
+      block:
+        - name: Check for available updates
+          ansible.builtin.apt:
+            update_cache: yes
+          check_mode: yes
+          register: update_check
+
+        - name: Apply updates if available
+          ansible.builtin.apt:
+            upgrade: dist
+            update_cache: yes
+          when: update_check.changed
+          register: patch_result
+
+        - name: Set patch status
+          set_fact:
+            system_status: "{{ system_status | combine({
+              'patch_status': 'PATCHING SUCCESSFUL' if patch_result.changed else 'NO PATCHES AVAILABLE TO PATCH'
+            }) }}"
+      when:
         - system_status.filesystem_status == "SUCCESS"
         - system_status.repo_status == "SUCCESS"
-      ignore_errors: yes
-
-    # Patch servers
-    - name: Patch servers with successful checks
-      ansible.builtin.apt:
-        upgrade: dist
-        update_cache: yes
-      when: 
-        - system_status.filesystem_status == "SUCCESS"
-        - system_status.repo_status == "SUCCESS"
-        - update_check is defined and update_check.changes|default({})|length > 0
-      register: patch_result
-      ignore_errors: yes
-
-    # Set patch status
-    - name: Set patch status
-      set_fact:
-        system_status: "{{ system_status | combine({
-          'patch_status': 'PATCHED' if (patch_result is defined and patch_result.changed) 
-                          else 'NO UPDATES AVAILABLE' if (update_check is defined and update_check.changes|default({})|length == 0) 
-                          else 'NOT PATCHED'
-        }) }}"
 
     # Update Status File
     - name: Update status file
