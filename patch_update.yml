@@ -1,6 +1,6 @@
 ---
 - name: Check Filesystem, Repository Status, and Patch Servers
-  hosts: all
+  hosts: ubuntu_servers
   become: yes
   vars:
     min_space_mb: 500
@@ -89,6 +89,7 @@
       when: 
         - system_status.filesystem_status == "SUCCESS"
         - system_status.repo_status == "SUCCESS"
+      ignore_errors: yes
 
     # Patch servers
     - name: Patch servers with successful checks
@@ -98,15 +99,16 @@
       when: 
         - system_status.filesystem_status == "SUCCESS"
         - system_status.repo_status == "SUCCESS"
-        - update_check.changes|default({})|length > 0
+        - update_check is defined and update_check.changes|default({})|length > 0
       register: patch_result
+      ignore_errors: yes
 
     # Set patch status
     - name: Set patch status
       set_fact:
         system_status: "{{ system_status | combine({
           'patch_status': 'PATCHED' if (patch_result is defined and patch_result.changed) 
-                          else 'NO UPDATES AVAILABLE' if (update_check.changes|default({})|length == 0) 
+                          else 'NO UPDATES AVAILABLE' if (update_check is defined and update_check.changes|default({})|length == 0) 
                           else 'NOT PATCHED'
         }) }}"
 
