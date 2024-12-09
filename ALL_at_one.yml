@@ -97,55 +97,47 @@
         path: "/home/svc_aux/{{ hostname }}.csv"
         line: "{{ csv_data }}"
       
-    # Ensure the CSV file is created before proceeding to the next step.
-    - name: Wait for CSV file to be fully written (optional)
+    - name: Wait for CSV file to be fully written
       ansible.builtin.wait_for:
         path: "/home/svc_aux/{{ hostname }}.csv"
         state: present
 
-- name: Run Python script to process CSV file 
-  hosts: localhost  # Change this to the appropriate host where the script should run.
+- name: Run Python script to process CSV file
+  hosts: localhost
+  gather_facts: no
   tasks:
-    - name: Create Python script to process CSV file 
+    - name: Create Python script to process CSV file
       ansible.builtin.copy:
         content: |
-          import pandas as pd 
-          import sys 
+          import pandas as pd
+          import sys
+          import glob
 
-          csv_file = sys.argv[1] 
-          html_file = '/home/svc_aux/data.html'
+          csv_files = glob.glob('/home/svc_aux/*.csv')
+          if not csv_files:
+              print("No CSV files found")
+              sys.exit(1)
 
-          max_attempts = 5 
-          delay = 10 
-
-          for attempt in range(max_attempts): 
+          for csv_file in csv_files:
+              html_file = csv_file.replace('.csv', '.html')
               try:
-                  df = pd.read_csv(csv_file) 
-                  html_content = df.to_html(index=False) 
+                  df = pd.read_csv(csv_file)
+                  html_content = df.to_html(index=False)
                   with open(html_file, 'w') as f:
-                      f.write(html_content) 
-                  print(f"HTML file created successfully at {html_file}") 
-                  break 
+                      f.write(html_content)
+                  print(f"HTML file created successfully at {html_file}")
               except Exception as e:
-                  print(f"Attempt {attempt + 1} failed with error: {str(e)}") 
-                  if attempt < max_attempts - 1:
-                      print(f"Retrying in {delay} seconds...") 
-                      time.sleep(delay) 
-                  else:
-                      print("Max attempts reached. Exiting.") 
-                      sys.exit(1)
+                  print(f"Error processing {csv_file}: {str(e)}")
 
         dest: "/home/svc_aux/process_csv.py"
         mode: '0755'
 
-    # Run the Python script after the CSV has been created.
-    - name: Run Python script to convert CSV to HTML 
+    - name: Run Python script to convert CSV to HTML
       ansible.builtin.command:
-        cmd: python3 /home/svc_aux/process_csv.py /home/svc_aux/{{ hostname }}.csv 
-      register: script_output 
+        cmd: python3 /home/svc_aux/process_csv.py
+      register: script_output
 
-    # Display output of the Python script execution.
-    - name: Display Python script output 
+    - name: Display Python script output
       ansible.builtin.debug:
         msg:
           - "stdout:\n{{ script_output.stdout }}"
