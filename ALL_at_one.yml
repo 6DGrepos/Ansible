@@ -221,3 +221,7 @@
 
     - name: Convert CSV to HTML
       command: python3 /home/svc_aux/backup/All_Servers_information/convert_html.py
+      become: yes
+      become_user: root
+      args:
+        chdir: /home/svc_aux/backup/ALL_Servers_information
