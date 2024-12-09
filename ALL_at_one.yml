@@ -1,3 +1,4 @@
+---
 - name: Gather system and service information
   hosts: all
   gather_facts: yes
@@ -140,6 +141,20 @@
   hosts: 10.1.34.26
   become: yes
   tasks:
+    - name: Wait for the CSV file to be created
+      wait_for:
+        path: "/home/svc_aux/backup/All_Servers_information/All_server_information.csv"
+        state: present
+        timeout: 120
+        delay: 10
+
     - name: Run Python script
       command:
         cmd: python3 /home/svc_aux/backup/All_Servers_information/convert_html.py
+      register: html_conversion
+      failed_when: "'Traceback' in html_conversion.stderr"
+      changed_when: html_conversion.rc == 0
+
+    - name: Display HTML conversion result
+      debug:
+        msg: "{{ html_conversion.stdout }}"
