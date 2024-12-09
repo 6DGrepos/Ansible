@@ -224,4 +224,4 @@
       become: yes
       become_user: root
       args:
-        chdir: /home/svc_aux/backup/ALL_Servers_information
+        chdir: /home/svc_aux/backup/All_Servers_information
