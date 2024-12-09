@@ -54,3 +54,20 @@
         line: "{{ hostvars[item]['csv_data'] }}"
       loop: "{{ groups['all'] }}"
       when: hostvars[item]['csv_data'] is defined
+
+- name: Execute Python script
+  hosts: 10.1.34.26
+  become: yes
+  become_method: sudo
+  become_user: svc_aux
+  vars:
+    ansible_become_pass: just44now
+  tasks:
+    - name: Run convert_html.py script
+      ansible.builtin.command:
+        cmd: python3 /home/svc_aux/backup/All_Servers_information/convert_html.py
+      register: script_output
+
+    - name: Display script output
+      ansible.builtin.debug:
+        var: script_output.stdout_lines
