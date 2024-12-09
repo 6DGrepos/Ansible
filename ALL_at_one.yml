@@ -1,4 +1,3 @@
----
 - name: Gather system and service information
   hosts: all
   gather_facts: yes
@@ -30,8 +29,8 @@
         done
       register: db_services
 
-    - name: Set database services status if none are running
-      set_fact:
+    - name: Set database services status
+      ansible.builtin.set_fact:
         db_services_status: "{{ db_services.stdout if db_services.stdout else 'No database is running on this server' }}"
 
     - name: Get database versions
@@ -75,109 +74,71 @@
         done
       register: web_services
 
-    - name: Set web services status if none are running
-      set_fact:
+    - name: Set web services status
+      ansible.builtin.set_fact:
         web_services_status: "{{ web_services.stdout if web_services.stdout else 'No web services are running' }}"
 
     - name: Collect all running services
-      shell: systemctl list-units --type=service --state=running | awk 'NR>1 && $1 !~ /^(LOAD|ACTIVE|SUB)$/ {print $1}' | awk 'NF > 0'
+      shell: |
+        systemctl list-units --type=service --state=running \
+        | awk 'NR>1 && $1 !~ /^(LOAD|ACTIVE|SUB)$/ {print $1}' | awk 'NF > 0'
       register: running_services
 
     - name: Format data for CSV
       ansible.builtin.set_fact:
-        csv_data: "{{ hostname }},{{ ip_address }},{{ os_version }},\"{{ db_services_status }}\",\"{{ db_versions.stdout | default('No database version found') }}\",{{ php_version.stdout | default('PHP is not installed') }},\"{{ web_services_status }}\",\"{{ running_services.stdout | default('No running services found') }}\""
+        csv_data: >
+          {{ hostname }},{{ ip_address }},{{ os_version }},
+          "{{ db_services_status }}",
+          "{{ db_versions.stdout | default('No database version found') }}",
+          {{ php_version.stdout | default('PHP is not installed') }},
+          "{{ web_services_status }}",
+          "{{ running_services.stdout | default('No running services found') }}"
 
-    - name: Create or clear output file for each host's information in text format.
+    - name: Create or clear output file for each host
       copy:
         content: ""
         dest: "/home/svc_aux/{{ hostname }}.txt"
 
-    # Write various information to text files.
-    - name: Write database information to file
+    - name: Write gathered information to text file
       lineinfile:
         path: "/home/svc_aux/{{ hostname }}.txt"
         line: "{{ item }}"
       loop:
         - "Database Information:"
-        - "---------------------"
         - "{{ db_services_status }}"
-
-    - name: Write database versions to file
-      lineinfile:
-        path: "/home/svc_aux/{{ hostname }}.txt"
-        line: "{{ item }}"
-      loop:
-        - ""
         - "Database Versions:"
-        - "------------------"
         - "{{ db_versions.stdout_lines | join('\n') | default('No database version found') }}"
-
-    - name: Write PHP version to file
-      lineinfile:
-        path: "/home/svc_aux/{{ hostname }}.txt"
-        line: "{{ item }}"
-      loop:
-        - ""
         - "PHP Version:"
-        - "------------"
         - "{{ php_version.stdout | default('PHP is not installed') }}"
-
-    - name: Write web services status to file
-      lineinfile:
-        path: "/home/svc_aux/{{ hostname }}.txt"
-        line: "{{ item }}"
-      loop:
-        - ""
-        - "Web Services Status:"
-        - "--------------------"
+        - "Web Services:"
         - "{{ web_services_status }}"
-
-    - name: Write running services to file
-      lineinfile:
-        path: "/home/svc_aux/{{ hostname }}.txt"
-        line: "{{ item }}"
-      loop:
-        - ""
         - "Running Services:"
-        - "----------------"
         - "{{ running_services.stdout_lines | join('\n') | default('No running services found') }}"
 
-- name: Update central CSV file and convert to HTML using Python script.
+- name: Update central CSV file and convert to HTML
   hosts: 10.1.34.26
   become: yes
-  become_method: sudo
-  become_user: root
-
   tasks:
-    # Ensure directory exists for backup and CSV files 
-    - name : Ensure directory exists 
+    - name: Ensure directory exists
       ansible.builtin.file:
-         path : /home/svc_aux/backup/All_Servers_information 
-         state : directory 
-         mode : '0775' 
-         owner : root 
-         group : root 
+        path: /home/svc_aux/backup/All_Servers_information
+        state: directory
+        mode: '0775'
 
-    # Create or truncate CSV file with header 
-    - name : Create or truncate CSV file with header 
-       ansible.builtin.copy : 
-         content : "Hostname,IP Address,OS Version,Database Information,Database Version,PHP Version,Web Services,All Running Services\n" 
-         dest : "/home/svc_aux/backup/All_Servers_information/All_server_information.csv" 
-         mode : '0664' 
-         owner : svc_aux 
-         group : svc_aux 
+    - name: Create or truncate CSV file with header
+      ansible.builtin.copy:
+        content: "Hostname,IP Address,OS Version,Database Info,DB Version,PHP Version,Web Services,Running Services\n"
+        dest: "/home/svc_aux/backup/All_Servers_information/All_server_information.csv"
+        mode: '0664'
 
-    # Append gathered information to CSV file 
-    - name : Append gathered information to CSV file 
-       ansible.builtin.lineinfile : 
-         path : "/home/svc_aux/backup/All_Servers_information/All_server_information.csv" 
-         line : "{{ hostvars[item]['csv_data'] }}" 
-       loop : "{{ groups['all'] }}" 
-       when : hostvars[item]['csv_data'] is defined 
+    - name: Append gathered information to CSV file
+      ansible.builtin.lineinfile:
+        path: "/home/svc_aux/backup/All_Servers_information/All_server_information.csv"
+        line: "{{ hostvars[item]['csv_data'] }}"
+      loop: "{{ groups['all'] }}"
+      when: hostvars[item]['csv_data'] is defined
 
-    # Execute the Python script to convert CSV to HTML.
-    - name : Convert CSV to HTML using Python script 
-       ansible.builtin.command :
-         cmd : python3 /home/svc_aux/backup/All_Servers_information/convert_html.py 
-       args:
-         chdir : /home/svc_aux/backup/All_Servers_information/
+    - name: Convert CSV to HTML using Python script
+      ansible.builtin.command:
+        cmd: python3 convert_html.py
+        chdir: /home/svc_aux/backup/All_Servers_information/
