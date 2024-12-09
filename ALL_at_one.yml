@@ -220,4 +220,3 @@
 
     - name: Convert CSV to HTML
       command: python3 /home/svc_aux/backup/All_Servers_information/convert_html.py
-      when: ansible_facts['ansible_date_time']['epoch'] | int > (ansible_facts['ansible_date_time']['epoch'] | int - 600)
