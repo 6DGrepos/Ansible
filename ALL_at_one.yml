@@ -211,6 +211,7 @@
   become: yes
   become_method: sudo
   become_user: root
+  gather_facts: yes
   tasks:
     - name: Wait for CSV file to be created
       wait_for:
