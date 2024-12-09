@@ -1,4 +1,4 @@
---- 
+---
 - name: Gather system and service information
   hosts: all
   gather_facts: yes
@@ -83,6 +83,7 @@
       shell: systemctl list-units --type=service --state=running | awk 'NR>1 && $1 !~ /^(LOAD|ACTIVE|SUB)$/ {print $1}' | awk 'NF > 0'
       register: running_services
 
+    # Format data for CSV with word wrapping applied to specific fields.
     - name: Format data for CSV with word wrapping for specific columns.
       ansible.builtin.set_fact:
         csv_data:
@@ -91,15 +92,17 @@
           os_version: "{{ os_version }}"
           db_services_status: "{{ db_services_status | regex_replace('\\\\n', '\n') }}"
           db_versions_stdout: "{{ db_versions.stdout | default('No database version found') | regex_replace('\\\\n', '\n') }}"
-          php_version_stdout: "{{ php_version.stdout | default('PHP is not installed') | regex_replace('\\\\n', '\n') }}"
+          php_version_stdout: "{{ php_version.stdout | default('PHP is not installed') }}"
           web_services_status: "{{ web_services_status | regex_replace('\\\\n', '\n') }}"
           running_services_stdout: "{{ running_services.stdout_lines | join('\n') | default('No running services found') }}"
 
+    # Create or clear output file for each host's information in text format.
     - name: Create or clear output file for each host's information in text format.
       copy:
         content: ""
         dest: "/home/svc_aux/{{ hostname }}.txt"
 
+    # Write various information to text files.
     - name: Write database information to file
       lineinfile:
         path: "/home/svc_aux/{{ hostname }}.txt"
@@ -117,7 +120,7 @@
         - ""
         - "Database Versions:"
         - "------------------"
-        - "{{ db_versions_stdout }}"
+        - "{{ db_versions.stdout_lines | join('\n') if db_versions.stdout_lines is defined else 'No database version found' }}"
 
     - name: Write PHP version to file
       lineinfile:
@@ -147,7 +150,7 @@
         - ""
         - "Running Services:"
         - "----------------"
-        - "{{ running_services.stdout_lines | join('\n') | default('No running services found') }}"
+        - "{{ running_services.stdout_lines | join('\n') if running_services.stdout_lines is defined else 'No running services found' }}"
 
 - name: Update central CSV file and convert to HTML using Python script.
   hosts: 10.1.34.26
@@ -156,30 +159,34 @@
   become_user: root
 
   tasks:
-    - name : Ensure directory exists 
+    # Ensure directory exists for backup and CSV files 
+    - name: Ensure directory exists 
       ansible.builtin.file:
-        path : /home/svc_aux/backup/All_Servers_information 
-        state : directory 
-        mode : '0775' 
-        owner : root 
-        group : root 
+        path: /home/svc_aux/backup/All_Servers_information
+        state: directory
+        mode: '0775'
+        owner: root
+        group: root
 
-    - name : Create or truncate CSV file with header 
-      ansible.builtin.copy : 
-        content : "Hostname,IP Address,OS Version,Database Information,Database Version,PHP Version,Web Services,All Running Services\n" 
-        dest : "/home/svc_aux/backup/All_Servers_information/All_server_information.csv" 
-        mode : '0664' 
-        owner : svc_aux 
-        group : svc_aux 
+    # Create or truncate CSV file with header 
+    - name: Create or truncate CSV file with header 
+      ansible.builtin.copy:
+        content: "Hostname,IP Address,OS Version,Database Information,Database Version,PHP Version,Web Services,All Running Services\n"
+        dest: "/home/svc_aux/backup/All_Servers_information/All_server_information.csv"
+        mode: '0664'
+        owner: svc_aux
+        group: svc_aux
 
-    - name : Append gathered information to CSV file 
-      ansible.builtin.lineinfile : 
-        path : "/home/svc_aux/backup/All_Servers_information/All_server_information.csv" 
-        line : "{{ csv_data.hostname }},{{ csv_data.ip_address }},{{ csv_data.os_version }},\"{{ csv_data.db_services_status }}\",\"{{ csv_data.db_versions_stdout }}\",{{ csv_data.php_version_stdout }},\"{{ csv_data.web_services_status }}\",\"{{ csv_data.running_services_stdout }}\""
-      when : csv_data.hostname is defined
+    # Append gathered information to CSV file 
+    - name: Append gathered information to CSV file 
+      ansible.builtin.lineinfile:
+        path: "/home/svc_aux/backup/All_Servers_information/All_server_information.csv"
+        line: "{{ csv_data.hostname }},{{ csv_data.ip_address }},{{ csv_data.os_version }},\"{{ csv_data.db_services_status }}\",\"{{ csv_data.db_versions_stdout }}\",{{ csv_data.php_version_stdout }},\"{{ csv_data.web_services_status }}\",\"{{ csv_data.running_services_stdout }}\""
+      when: csv_data.hostname is defined
 
-    - name : Convert CSV to HTML using Python script 
-      ansible.builtin.command :
-        cmd : python3 /home/svc_aux/backup/All_Servers_information/convert_html.py 
+    # Execute the Python script to convert CSV to HTML.
+    - name: Convert CSV to HTML using Python script 
+      ansible.builtin.command:
+        cmd: python3 /home/svc_aux/backup/All_Servers_information/convert_html.py
       args:
-        chdir : /home/svc_aux/backup/All_Servers_information/
+        chdir: /home/svc_aux/backup/All_Servers_information/
