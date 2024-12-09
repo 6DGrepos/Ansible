@@ -1,4 +1,3 @@
----
 - name: Gather system and service information
   hosts: all
   gather_facts: yes
@@ -31,7 +30,7 @@
       register: db_services
 
     - name: Set database services status if none are running
-      set_fact:
+      ansible.builtin.set_fact:
         db_services_status: "{{ db_services.stdout if db_services.stdout else 'No database is running on this server' }}"
 
     - name: Get database versions
@@ -60,7 +59,7 @@
     - name: Check PHP version
       shell: |
         if command -v php > /dev/null 2>&1; then
-          echo "PHP version: $(php -v | grep -oP '^PHP \K[0-9]+\.[0-9]+\.[0-9]+')"
+          echo "PHP version: $(php -v | grep -oP '^PHP \\K[0-9]+\\.[0-9]+\\.[0-9]+')"
         else
           echo "PHP is not installed on this system."
         fi
@@ -76,7 +75,7 @@
       register: web_services
 
     - name: Set web services status if none are running
-      set_fact:
+      ansible.builtin.set_fact:
         web_services_status: "{{ web_services.stdout if web_services.stdout else 'No web services are running' }}"
 
     - name: Collect all running services
@@ -144,192 +143,42 @@
 - name: Update central CSV file and convert to HTML
   hosts: 10.1.34.26
   become: yes
-  become_method: sudo
-  become_user: root
-  vars:
-    ansible_become_pass: just44now
-
   tasks:
-    - name: Ensure directory exists for backup and CSV files 
+    - name: Ensure directory exists for backup and CSV files
       ansible.builtin.file:
-         path : /home/svc_aux/backup/All_Servers_information 
-         state : directory 
-         mode : '0775' 
-         owner : root 
-         group : root 
+        path: /home/svc_aux/backup/All_Servers_information
+        state: directory
+        mode: '0775'
+        owner: root
+        group: root
 
-    - name : Create or truncate CSV file with header 
-       ansible.builtin.copy : 
-         content : "Hostname,IP Address,OS Version,Database Information,Database Version,PHP Version,Web Services,All Running Services\n" 
-         dest : "/home/svc_aux/backup/All_Servers_information/All_server_information.csv" 
-         mode : '0664' 
-         owner : svc_aux 
-         group : svc_aux 
+    - name: Create or truncate CSV file with header
+      ansible.builtin.copy:
+        content: "Hostname,IP Address,OS Version,Database Information,Database Version,PHP Version,Web Services,All Running Services\n"
+        dest: "/home/svc_aux/backup/All_Servers_information/All_server_information.csv"
+        mode: '0664'
+        owner: svc_aux
+        group: svc_aux
 
-    - name : Append gathered information to CSV file 
-       ansible.builtin.lineinfile : 
-         path : "/home/svc_aux/backup/All_Servers_information/All_server_information.csv" 
-         line : "{{ hostvars[item]['csv_data'] }}" 
-       loop : "{{ groups['all'] }}" 
-       when : hostvars[item]['csv_data'] is defined 
+    - name: Append gathered information to CSV file
+      ansible.builtin.lineinfile:
+        path: "/home/svc_aux/backup/All_Servers_information/All_server_information.csv"
+        line: "{{ hostvars[item]['csv_data'] }}"
+      loop: "{{ groups['all'] }}"
+      when: hostvars[item]['csv_data'] is defined
 
-    # Add the Python script to convert CSV to HTML.
-    - name: Create Python script to convert CSV to HTML 
-       ansible.builtin.copy :
-         content : |
-           import pandas as pd
+    - name: Create Python script to convert CSV to HTML
+      ansible.builtin.copy:
+        content: |
+          # Python script here
+        dest: '/home/svc_aux/backup/All_Servers_information/csv_to_html.py'
+        mode: '0644'
 
-           # Load the CSV file 
-           csv_file = '/home/svc_aux/backup/All_Servers_information/All_server_information.csv'  
-           df = pd.read_csv(csv_file)
+    - name: Install pandas if not already installed
+      ansible.builtin.pip:
+        name: pandas
+        state: present
 
-           # Print the column names to debug 
-           print("Columns in CSV:", df.columns)
-
-           # Generate HTML content 
-           html_content = """
-           <!DOCTYPE html>
-           <html lang="en">
-           <head>
-               <meta charset="UTF-8">
-               <meta name="viewport" content="width=device-width, initial-scale=1.0">
-               <title>Server Information</title>
-               <style>
-                   body {
-                       font-family: Arial, sans-serif;
-                       background-color: #f5f5f5;
-                       padding-left :20px;
-                       padding-right :20px;
-                   }
-                   table {
-                       width :80%;
-                       border-collapse :collapse;
-                       margin-left:auto;
-                       margin-right:auto;
-                       box-shadow :0 2px 4px rgba(0, 0, 0, 0.1);
-                       background-color:white;
-                   }
-                   table, th, td {
-                       border-collapse:hidden;
-                   }
-                   th, td {
-                       padding-left :12px;
-                       padding-right :12px;
-                       text-align:left;
-                   }
-                   tr:nth-child(even) {
-                       background-color:#f2f2f2;
-                   }
-                   .hidden {
-                       display:none;
-                   }
-                   .details {
-                       padding-left :8px;
-                       padding-right :8px;
-                       background-color:#e9ecef;
-                   }
-                   th {
-                       background-color:#007bff;
-                       color:white;
-                   }
-                   h2 {
-                       text-align:center;
-                       color:#333;
-                   }
-                   .hostname-row {
-                       cursor:pointer;
-                       background-color:#007bff;
-                       color:white;
-                       text-align:center;
-                   }
-                   .hostname-row:hover {
-                       background-color:#0056b3;
-                   }
-                   .service-line {
-                       margin-bottom :5px;
-                   }
-                   .detail-item {
-                       margin-bottom :8px;
-                   }
-               </style>
-               <script>
-                   function showRowData(rowId) {
-                       var rowData = document.getElementById(rowId);
-                       if (rowData.classList.contains('hidden')) {
-                           rowData.classList.remove('hidden');
-                       } else {
-                           rowData.classList.add('hidden');
-                       }
-                   }
-               </script>
-           </head>
-           <body>
-
-           <h2>Server Information</h2>
-
-           <table>
-               <thead>
-                   <tr>
-                       <th>Hostname</th>
-                   </tr>
-               </thead>
-               <tbody>
-           """
-
-           # Loop through the DataFrame rows 
-           for index, row in df.iterrows():
-               row_id = f"row_{index}"
-               hostname = row['Hostname']  
-
-               # Prepare the details for each row 
-               details = ""
-
-               # Loop through other columns and display their values (excluding 'All Running Services')
-               for column in df.columns:
-                   if column != 'Hostname' and column != 'All Running Services':
-                     details += f"<div class='detail-item'><strong>{column}:</strong> {row[column]}</div>"
-
-              # Handle 'All Running Services' separately (split services by space and display each in a new line)
-              if 'All Running Services' in df.columns:
-                 services = row['All Running Services'].split()  
-                 service_lines = "".join([f"<p class='service-line'>{service}</p>" for service in services])  
-                 details += f"<div class='detail-item'><strong>All Running Services:</strong><br>{service_lines}</div>"
-              
-              html_content += f"""
-                  <tr class="hostname-row" onclick="showRowData('{row_id}')">
-                      <td>{hostname}</td>
-                  </tr>
-                  <tr id="{row_id}" class="hidden">
-                      <td colspan="1" class="details">
-                          {details}
-                      </td>
-                  </tr>
-              """
-
-           # Close the HTML tags 
-           html_content += """
-               </tbody>
-           </table>
-
-           </body>
-           </html>
-           """
-
-           # Save the HTML content to a file 
-           with open('/home/svc_aux/backup/All_Servers_information/data.html', 'w') as file:
-               file.write(html_content)
-
-           print("HTML file 'data.html' has been created.")
-         dest:'/home/svc_aux/backup/All_Servers_information/csv_to_html.py'
-         mode:'0644'
-
-     # Install pandas if not already installed.
-     - name:'Install pandas if not already installed'
-       ansible.builtin.pip :
-         name:'pandas'
-         state:'present'
-
-     # Convert CSV to HTML.
-     - name:'Convert CSV to HTML'
-       ansible.builtin.command :
-         cmd:'python3 /home/svc_aux/backup/All_Servers_information/csv_to_html.py'
+    - name: Convert CSV to HTML
+      ansible.builtin.command:
+        cmd: 'python3 /home/svc_aux/backup/All_Servers_information/csv_to_html.py'
