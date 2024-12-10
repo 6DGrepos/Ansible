@@ -29,7 +29,7 @@
       delegate_to: 10.1.34.26
 
 - name: Compare services and generate reports
-  hosts: 10.1.34.26
+  hosts: all  # Ensure this task runs for all hosts, not just 10.1.34.26
   remote_user: svc_aux
   become: yes
   become_method: sudo
@@ -47,7 +47,7 @@
       ansible.builtin.copy:
         content: "{{ running_services_after_reboot.stdout }}"
         dest: "/home/svc_aux/backup/files/{{ fqdn_output.stdout }}/running_services_after_reboot.txt"
-      delegate_to: 10.1.34.26
+      delegate_to: 10.1.34.26  # Delegate the file save to the correct server
 
     - name: Compare services and save the result
       ansible.builtin.shell: |
@@ -60,7 +60,7 @@
           echo "$diff_output" >> /home/svc_aux/backup/files/{{ fqdn_output.stdout }}/comparison_result.txt
         fi
         '
-      delegate_to: 10.1.34.26
+      delegate_to: 10.1.34.26  # Ensure the comparison result is saved on the correct server
 
 - name: Convert CSV to HTML on remote server
   hosts: 10.1.34.26
