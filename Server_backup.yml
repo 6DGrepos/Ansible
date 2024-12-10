@@ -1,4 +1,3 @@
----
 - name: Execute commands and store output
   hosts: all
   tasks:
@@ -164,3 +163,18 @@
       delegate_to: localhost
       vars:
         ansible_ssh_pass: just44now
+
+- name: Convert CSV to HTML on remote server
+  hosts: 10.1.34.26
+  remote_user: svc_aux
+  become: yes
+  become_method: sudo
+  become_user: root
+  gather_facts: yes
+  tasks:
+    - name: Convert CSV to HTML
+      command: python3 /home/svc_aux/backup/serverbackups/new_convert_backups_to_html.py
+      become: yes
+      become_user: root
+      args:
+        chdir: /home/svc_aux/backup/serverbackups/
