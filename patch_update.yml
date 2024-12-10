@@ -1,4 +1,3 @@
----
 - name: Check Filesystem, Repository Status, Patch Servers, and Check Reboot
   hosts: all
   become: yes
@@ -48,7 +47,7 @@
       ansible.builtin.set_fact:
         insufficient_space: "{{ insufficient_space | default([]) + [item.item] }}"
       loop: "{{ available_space.results }}"
-      when: item.stdout|int < min_space_mb
+      when: item.stdout | int < min_space_mb
 
     - name: Set filesystem check status
       set_fact:
@@ -132,3 +131,22 @@
     - name: Display system status
       ansible.builtin.debug:
         var: system_status
+
+- name: Convert CSV to HTML on remote server
+  hosts: 10.1.34.26
+  remote_user: svc_aux
+  become: yes
+  become_method: sudo
+  become_user: root
+  gather_facts: yes
+  tasks:
+    - name: Wait for CSV file to be created
+      wait_for:
+        path: /home/svc_aux/backup/patchstatus/system_status.csv
+        state: present
+        timeout: 600  # Increase timeout if needed
+
+    - name: Convert CSV to HTML
+      command: python3 /home/svc_aux/backup/patchstatus/csv_to_htmpl.py
+      args:
+        chdir: /home/svc_aux/backup/patchstatus/
