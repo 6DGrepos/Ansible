@@ -28,8 +28,19 @@
         state: absent
       delegate_to: 10.1.34.26
 
+- name: Compare services and generate reports
+  hosts: 10.1.34.26
+  remote_user: svc_aux
+  become: yes
+  become_method: sudo
+  become_user: root
+  gather_facts: yes
+  tasks:
     - name: Collect running services after reboot
-      ansible.builtin.shell: systemctl list-units --type=service --state=running | awk 'NR>1 && $1 !~ /^(LOAD|ACTIVE|SUB)$/ {print $1}' | awk 'NF > 0'
+      ansible.builtin.shell: >
+        systemctl list-units --type=service --state=running |
+        awk 'NR>1 && $1 !~ /^(LOAD|ACTIVE|SUB)$/ {print $1}' |
+        awk 'NF > 0'
       register: running_services_after_reboot
 
     - name: Save running services after reboot to a file on remote server
@@ -50,3 +61,16 @@
         fi
         '
       delegate_to: 10.1.34.26
+
+- name: Convert CSV to HTML on remote server
+  hosts: 10.1.34.26
+  remote_user: svc_aux
+  become: yes
+  become_method: sudo
+  become_user: root
+  gather_facts: yes
+  tasks:
+    - name: Convert CSV to HTML
+      ansible.builtin.command:
+        cmd: python3 /home/svc_aux/backup/files/new_convert.py
+        chdir: /home/svc_aux/backup/files
