@@ -58,8 +58,7 @@
             echo "$diff_output" >> "$result_file"
           fi
         else
-          echo "No data available for comparison. Currently running services are listed below:" > "$result_file"
-          cat "$after_file" >> "$result_file"
+          echo "No data available for comparison." > "$result_file"
         fi
         '
       when: before_file_check.stat.exists or not before_file_check.stat.exists
