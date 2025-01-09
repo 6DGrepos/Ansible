@@ -7,7 +7,7 @@
         gather_subset: all
 
     - name: Get the hostname with domain using hostname -f
-      ansible.builtin.command: hostname -f
+      ansible.builtin.command: uname -n
       register: fqdn_output
 
     - name: Create directory using FQDN
