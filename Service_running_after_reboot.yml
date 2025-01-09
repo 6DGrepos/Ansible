@@ -8,7 +8,7 @@
   gather_facts: no
   tasks:
     - name: Get the hostname with domain using hostname -f
-      ansible.builtin.command: hostname -f
+      ansible.builtin.command: uname -n
       register: fqdn_output
 
     - name: Create directory for service files using FQDN
