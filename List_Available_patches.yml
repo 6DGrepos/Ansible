@@ -1,38 +1,30 @@
 ---
-- name: Check for available updates
+- name: Check for available updates on Debian and RedHat systems
   hosts: all
-  become: yes
+  become: true
   tasks:
-    - name: Print OS family
-      debug:
-        msg: "OS Family: {{ ansible_os_family }}"
+    - name: Gather facts about the system
+      ansible.builtin.setup:
 
-    - name: Check for updates on Debian-based systems
-      apt:
+    - name: Check for available updates on Debian-based systems
+      ansible.builtin.apt:
         update_cache: yes
-      when: ansible_os_family == "Debian"
-
-    - name: List available updates on Debian-based systems
-      command: apt list --upgradable
+        upgrade: dist
+      when: ansible_facts.os_family == "Debian"
       register: debian_updates
-      when: ansible_os_family == "Debian"
 
-    - name: Print available updates on Debian-based systems
-      debug:
-        msg: "{{ debian_updates.stdout_lines }}"
-      when: ansible_os_family == "Debian"
+    - name: Display available updates on Debian-based systems
+      ansible.builtin.debug:
+        msg: "Debian updates: {{ debian_updates.results | map(attribute='name') | join(', ') }}"
+      when: ansible_facts.os_family == "Debian"
 
-    - name: Check for updates on Red Hat-based systems
-      yum:
-        update_cache: yes
-      when: ansible_os_family == "RedHat"
-
-    - name: List available updates on Red Hat-based systems
-      command: yum check-update
+    - name: Check for available updates on RedHat-based systems
+      ansible.builtin.yum:
+        list: updates
+      when: ansible_facts.os_family == "RedHat"
       register: redhat_updates
-      when: ansible_os_family == "RedHat"
 
-    - name: Print available updates on Red Hat-based systems
-      debug:
-        msg: "{{ redhat_updates.stdout_lines }}"
-      when: ansible_os_family == "RedHat"
+    - name: Display available updates on RedHat-based systems
+      ansible.builtin.debug:
+        msg: "RedHat updates: {{ redhat_updates.results | map(attribute='name') | join(', ') }}"
+      when: ansible_facts.os_family == "RedHat"
