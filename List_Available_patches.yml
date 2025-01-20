@@ -1,33 +1,48 @@
 ---
 - name: Check for upgradable packages on servers
   hosts: all
-  gather_facts: true
+  gather_facts: false
   tasks:
+    - name: Gather minimal facts
+      ansible.builtin.setup:
+        gather_subset:
+          - '!all'
+          - '!any'
+          - distribution
+      ignore_errors: true
+
+    - name: Check OS distribution
+      ansible.builtin.debug:
+        msg: "Detected OS: {{ ansible_distribution | default('Unknown') }}"
+
     - name: Check upgradable packages on Debian-based systems
       ansible.builtin.apt:
         update_cache: yes
+        cache_valid_time: 3600
       check_mode: yes
       register: apt_check
-      when: ansible_os_family == "Debian"
+      when: ansible_distribution is defined and ansible_distribution in ['Debian', 'Ubuntu']
+      ignore_errors: true
 
     - name: Display upgradable packages on Debian-based systems
       ansible.builtin.debug:
         msg: "{{ apt_check.changes }}"
-      when: ansible_os_family == "Debian"
+      when: apt_check is defined and apt_check.changed
 
     - name: Check upgradable packages on RedHat-based systems
       ansible.builtin.dnf:
         list: updates
       check_mode: yes
       register: dnf_check
-      when: ansible_os_family == "RedHat"
+      when: ansible_distribution is defined and ansible_distribution in ['RedHat', 'CentOS', 'Fedora']
+      ignore_errors: true
 
     - name: Display upgradable packages on RedHat-based systems
       ansible.builtin.debug:
         msg: "{{ dnf_check.results }}"
-      when: ansible_os_family == "RedHat"
+      when: dnf_check is defined and dnf_check.results is defined
 
     - name: Display message for unknown OS
       ansible.builtin.debug:
-        msg: "Could not determine the OS for {{ inventory_hostname }}"
-      when: ansible_os_family != "Debian" and ansible_os_family != "RedHat"
+        msg: "Could not determine or unsupported OS for {{ inventory_hostname }}"
+      when: ansible_distribution is not defined or ansible_distribution not in ['Debian', 'Ubuntu', 'RedHat', 'CentOS', 'Fedora']
