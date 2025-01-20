@@ -1,10 +1,13 @@
----
 - name: Check for available updates on Debian and RedHat systems
   hosts: all
   become: yes
   tasks:
     - name: Gather facts about the system
       ansible.builtin.gather_facts:
+
+    - name: Debug ansible_facts
+      debug:
+        var: ansible_facts
 
     - name: Get the hostname of the system
       shell: uname -n
