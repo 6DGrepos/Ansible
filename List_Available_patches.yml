@@ -51,5 +51,6 @@
       copy:
         src: "/tmp/available_updates_{{ ansible_hostname }}.txt"
         dest: "/home/svc_aux/backup/patchinformation/patchlist_{{ ansible_hostname }}.txt"
+        remote_src: yes  # Ensures that the file is copied from the remote server to another location
       delegate_to: "10.1.34.26"
       when: ansible_hostname != "10.1.34.26"
