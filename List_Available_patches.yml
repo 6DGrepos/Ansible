@@ -20,9 +20,9 @@
       when: distro.stdout in ["rhel", "centos", "rocky", "almalinux"]
       ansible.builtin.shell: |
         if command -v dnf > /dev/null 2>&1; then
-          dnf check-update
+          dnf check-update --quiet
         else
-          yum check-update
+          yum check-update --quiet
         fi
       register: redhat_updates
       failed_when: redhat_updates.rc not in [0, 100]
@@ -31,35 +31,43 @@
     - name: List available updates for Debian-based systems
       when: distro.stdout in ["debian", "ubuntu"]
       ansible.builtin.shell: |
-        apt update -qq && apt list --upgradable 2>/dev/null
+        apt update -qq && apt list --upgradable 2>/dev/null | grep -v '^Listing'
       register: debian_updates
       failed_when: false
       changed_when: false
 
-    - name: Ensure the remote directory exists
+    - name: Clear the remote CSV file
       ansible.builtin.file:
-        path: "{{ remote_path | dirname }}"
-        state: directory
-        mode: '0755'
+        path: "{{ remote_path }}"
+        state: absent
       delegate_to: "{{ remote_server }}"
+      run_once: true
+
+    - name: Create the remote CSV file with headers
+      ansible.builtin.copy:
+        content: "Hostname,Package,Current Version,Available Version\n"
+        dest: "{{ remote_path }}"
+        mode: '0644'
+      delegate_to: "{{ remote_server }}"
+      run_once: true
 
     - name: Append patch information to the remote CSV file
-      ansible.builtin.blockinfile:
+      ansible.builtin.lineinfile:
         path: "{{ remote_path }}"
-        block: |
-          {{ inventory_hostname }} ({{ ansible_facts.hostname }})
-          {% if distro.stdout in ["rhel", "centos", "rocky", "almalinux"] %}
-          {% for line in redhat_updates.stdout_lines %}
-          {{ line | regex_replace('^(\S+)\s+(\S+)\s+(\S+).*$', '\\1,\\2,\\3') }}
-          {% endfor %}
-          {% elif distro.stdout in ["debian", "ubuntu"] %}
-          {% for line in debian_updates.stdout_lines if not line.startswith('Listing...') %}
-          {{ line | regex_replace('^(\S+)/\S+\s+\S+\s+(\S+)\s+(\S+).*$', '\\1,\\2,\\3') }}
-          {% endfor %}
-          {% else %}
-          Unsupported Linux Distribution ({{ distro.stdout }})
-          {% endif %}
-        marker: "# {mark} ANSIBLE MANAGED BLOCK FOR {{ inventory_hostname }}"
-        create: yes
-        state: present
+        line: "{{ item }}"
+        insertafter: EOF
       delegate_to: "{{ remote_server }}"
+      with_items:
+        - "{{ inventory_hostname }} ({{ ansible_facts.hostname }})"
+        - "{% if distro.stdout in ['rhel', 'centos', 'rocky', 'almalinux'] %}"
+        - "{% for line in redhat_updates.stdout_lines %}"
+        - "{{ inventory_hostname }},{{ line.split()[0] }},{{ line.split()[1] }},{{ line.split()[2] }}"
+        - "{% endfor %}"
+        - "{% elif distro.stdout in ['debian', 'ubuntu'] %}"
+        - "{% for line in debian_updates.stdout_lines %}"
+        - "{{ inventory_hostname }},{{ line.split()[0].split('/')[0] }},{{ line.split()[1] }},{{ line.split()[5] }}"
+        - "{% endfor %}"
+        - "{% else %}"
+        - "{{ inventory_hostname }},Unsupported Linux Distribution ({{ distro.stdout }}),,,"
+        - "{% endif %}"
+        - ""
