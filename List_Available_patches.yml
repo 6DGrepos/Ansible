@@ -13,7 +13,7 @@
       register: distro
       changed_when: false
 
-    - name: List available updates for Red Hat-based systems
+    - name: Gather patch information for Red Hat-based systems
       when: distro.stdout in ["rhel", "centos", "rocky", "almalinux"]
       ansible.builtin.shell: |
         if command -v dnf > /dev/null 2>&1; then
@@ -25,7 +25,7 @@
       failed_when: redhat_updates.rc not in [0, 100]
       changed_when: false
 
-    - name: List available updates for Debian-based systems
+    - name: Gather patch information for Debian-based systems
       when: distro.stdout in ["debian", "ubuntu"]
       ansible.builtin.shell: |
         apt update -qq && apt list --upgradable 2>/dev/null
@@ -33,10 +33,10 @@
       failed_when: false
       changed_when: false
 
-    - name: Save patch information to a centralized CSV file
-      ansible.builtin.lineinfile:
-        path: /tmp/patchlist.csv
-        line: |
+    - name: Save patch information locally
+      ansible.builtin.copy:
+        content: |
+          Hostname,Package,Details
           {% if distro.stdout in ["rhel", "centos", "rocky", "almalinux"] %}
           {% for line in redhat_updates.stdout_lines %}
           {{ inventory_hostname }},{{ line | regex_replace(' +', ',') }}
@@ -48,8 +48,22 @@
           {% else %}
           {{ inventory_hostname }},Unsupported Linux Distribution ({{ distro.stdout }})
           {% endif %}
-        create: yes
-        state: present
+        dest: /tmp/patchlist_{{ inventory_hostname }}.csv
+
+- name: Consolidate and transfer patch information
+  hosts: localhost
+  tasks:
+    - name: Gather patch files from all hosts
+      ansible.builtin.fetch:
+        src: /tmp/patchlist_{{ inventory_hostname }}.csv
+        dest: /tmp/patchlist_data/
+        flat: yes
+
+    - name: Consolidate all patch lists into one file
+      ansible.builtin.shell: |
+        cat /tmp/patchlist_data/*.csv > /tmp/patchlist.csv
+      args:
+        executable: /bin/bash
 
     - name: Transfer consolidated patch list to remote server
       ansible.builtin.copy:
