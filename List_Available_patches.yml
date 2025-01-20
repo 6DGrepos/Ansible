@@ -34,19 +34,22 @@
       lineinfile:
         path: /home/svc_aux/backup/patchinformation/patchlist.txt
         line: "Hostname: {{ hostname.stdout }}"
+        create: yes
       delegate_to: 10.1.34.26
 
     - name: Write RedHat patches to file
-      lineinfile:
+      blockinfile:
         path: /home/svc_aux/backup/patchinformation/patchlist.txt
-        line: "{{ redhat_patches.stdout }}"
+        block: |
+          {{ redhat_patches.stdout }}
       when: redhat_patches.stdout is defined and redhat_patches.stdout != ""
       delegate_to: 10.1.34.26
 
     - name: Write Debian patches to file
-      lineinfile:
+      blockinfile:
         path: /home/svc_aux/backup/patchinformation/patchlist.txt
-        line: "{{ debian_patches.stdout }}"
+        block: |
+          {{ debian_patches.stdout }}
       when: debian_patches.stdout is defined and debian_patches.stdout != ""
       delegate_to: 10.1.34.26
 
