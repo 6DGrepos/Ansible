@@ -1,3 +1,4 @@
+---
 - name: Linux Patching Playbook
   hosts: all
   become: yes
@@ -6,43 +7,74 @@
     output_file: "/home/svc_aux/backup/patchinformation/patchlist.txt"
 
   tasks:
+    - name: Ensure output directory exists on output server
+      file:
+        path: "/home/svc_aux/backup/patchinformation"
+        state: directory
+      delegate_to: "{{ output_server }}"
+      run_once: true
+
+    - name: Clear previous content of the output file
+      file:
+        path: "{{ output_file }}"
+        state: absent
+      delegate_to: "{{ output_server }}"
+      run_once: true
+
+    - name: Create empty output file
+      file:
+        path: "{{ output_file }}"
+        state: touch
+      delegate_to: "{{ output_server }}"
+      run_once: true
+
     - name: Get hostname
       command: uname -n
       register: hostname
       changed_when: false
 
     - name: List available updates (Debian)
-      shell: apt list --upgradable
+      shell: apt list --upgradable 2>/dev/null | grep -v "Listing..."
       register: debian_updates
       when: ansible_os_family == "Debian"
 
     - name: List available updates (RedHat)
-      dnf:
-        list: updates
+      shell: dnf check-update || true
       register: redhat_updates
       when: ansible_os_family == "RedHat"
 
-    - name: Generate patch list content
+    - name: Generate patch list content for Debian-based systems
       set_fact:
-        patch_content: >
-          {% if ansible_os_family == "Debian" %}
-          {% if debian_updates.stdout_lines | length > 1 %}
+        patch_content_debian: >
+          {% if debian_updates.stdout_lines | length > 0 %}
           {{ debian_updates.stdout }}
           {% else %}
-          No patches or updates available for this server
+          No patches or updates available for this server.
           {% endif %}
-          {% elif ansible_os_family == "RedHat" %}
-          {% if redhat_updates.results | length > 0 %}
-          {% for package in redhat_updates.results %}
-          {{ package.name }} - {{ package.version }}-{{ package.release }}
-          {% endfor %}
-          {% else %}
-          No patches or updates available for this server
-          {% endif %}
-          {% endif %}
+      when: ansible_os_family == "Debian"
 
-    - name: Write patch list to file on output server
+    - name: Generate patch list content for Red Hat-based systems
+      set_fact:
+        patch_content_redhat: >
+          {% if redhat_updates.stdout_lines | length > 0 %}
+          {{ redhat_updates.stdout }}
+          {% else %}
+          No patches or updates available for this server.
+          {% endif %}
+      when: ansible_os_family == "RedHat"
+
+    - name: Write patch list to file on output server (Debian)
       copy:
-        content: "{{ hostname.stdout }}\n\n{{ patch_content }}\n"
+        content: "{{ hostname.stdout }}\n\n{{ patch_content_debian }}\n"
         dest: "{{ output_file }}"
+        remote_src: true
       delegate_to: "{{ output_server }}"
+      when: ansible_os_family == "Debian"
+
+    - name: Write patch list to file on output server (RedHat)
+      copy:
+        content: "{{ hostname.stdout }}\n\n{{ patch_content_redhat }}\n"
+        dest: "{{ output_file }}"
+        remote_src: true
+      delegate_to: "{{ output_server }}"
+      when: ansible_os_family == "RedHat"
