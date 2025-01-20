@@ -25,10 +25,20 @@
       failed_when: redhat_updates.rc not in [0, 100]
       changed_when: false
 
-    - name: Show Red Hat-based updates
+    - name: Save Red Hat-based updates to HTML
       when: distro.stdout in ["rhel", "centos", "rocky", "almalinux"]
-      debug:
-        msg: "{{ redhat_updates.stdout_lines }}"
+      ansible.builtin.copy:
+        content: |
+          <html>
+          <head><title>Patch List - {{ inventory_hostname }}</title></head>
+          <body>
+          <h1>Patch List for {{ inventory_hostname }}</h1>
+          <pre>
+          {{ redhat_updates.stdout_lines | join('\n') }}
+          </pre>
+          </body>
+          </html>
+        dest: /tmp/patchlist_{{ inventory_hostname }}.html
 
     - name: List available updates for Debian-based systems
       when: distro.stdout in ["debian", "ubuntu"]
@@ -38,12 +48,36 @@
       failed_when: false
       changed_when: false
 
-    - name: Show Debian-based updates
+    - name: Save Debian-based updates to HTML
       when: distro.stdout in ["debian", "ubuntu"]
-      debug:
-        msg: "{{ debian_updates.stdout_lines }}"
+      ansible.builtin.copy:
+        content: |
+          <html>
+          <head><title>Patch List - {{ inventory_hostname }}</title></head>
+          <body>
+          <h1>Patch List for {{ inventory_hostname }}</h1>
+          <pre>
+          {{ debian_updates.stdout_lines | join('\n') }}
+          </pre>
+          </body>
+          </html>
+        dest: /tmp/patchlist_{{ inventory_hostname }}.html
 
     - name: Handle unknown distributions
       when: distro.stdout not in ["rhel", "centos", "rocky", "almalinux", "debian", "ubuntu"]
-      debug:
-        msg: "Unsupported Linux distribution: {{ distro.stdout }}"
+      ansible.builtin.copy:
+        content: |
+          <html>
+          <head><title>Patch List - {{ inventory_hostname }}</title></head>
+          <body>
+          <h1>Unsupported Linux Distribution</h1>
+          <p>{{ distro.stdout }}</p>
+          </body>
+          </html>
+        dest: /tmp/patchlist_{{ inventory_hostname }}.html
+
+    - name: Transfer patch list to remote server
+      ansible.builtin.copy:
+        src: /tmp/patchlist_{{ inventory_hostname }}.html
+        dest: "10.1.34.26:/home/svc_aux/backup/patchinformation/patchlist_{{ inventory_hostname }}.html"
+        mode: '0644'
