@@ -19,12 +19,17 @@
     - name: Set dnf updates output variable if dnf updates exist
       set_fact:
         dnf_updates_stdout: "{{ dnf_updates.stdout if dnf_updates.stdout is defined else '' }}"
-      when: ansible_facts['os_family'] == 'RedHat'
+      when: ansible_facts['os_family'] == 'RedHat' and dnf_updates is defined
 
     - name: Set apt updates output variable if apt updates exist
       set_fact:
         apt_updates_stdout: "{{ apt_updates.stdout if apt_updates.stdout is defined else '' }}"
-      when: ansible_facts['os_family'] == 'Debian'
+      when: ansible_facts['os_family'] == 'Debian' and apt_updates is defined
+
+    - name: Ensure both dnf and apt updates outputs are defined
+      set_fact:
+        dnf_updates_stdout: "{{ dnf_updates_stdout | default('') }}"
+        apt_updates_stdout: "{{ apt_updates_stdout | default('') }}"
 
     - name: Format output for each server with headers and footers
       set_fact:
