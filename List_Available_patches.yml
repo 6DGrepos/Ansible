@@ -1,11 +1,11 @@
 ---
-- name: List available patches for Linux systems
+- name: Linux Patching Playbook
   hosts: all
   become: yes
   vars:
-    remote_output_dir: "/tmp"
     output_server: "10.1.34.26"
     output_file: "/home/svc_aux/backup/patchinformation/patchlist.txt"
+    reboot_ok: false
 
   tasks:
     - name: Ensure output directory exists on output server
@@ -34,56 +34,81 @@
       register: hostname
       changed_when: false
 
-    - name: List available updates for Red Hat-based systems
+    - name: Update package cache (Debian)
+      apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: List available updates (Debian)
+      shell: apt list --upgradable
+      register: debian_updates
+      when: ansible_os_family == "Debian"
+
+    - name: List available updates (RedHat)
       dnf:
         list: updates
       register: redhat_updates
       when: ansible_os_family == "RedHat"
 
-    - name: List available updates for Debian-based systems
-      apt:
-        update_cache: yes
-      register: debian_updates
-      when: ansible_os_family == "Debian"
+    - name: Generate patch list content
+      set_fact:
+        patch_content: >
+          {% if ansible_os_family == "Debian" %}
+          {% if debian_updates.stdout_lines | length > 1 %}
+          {{ debian_updates.stdout }}
+          {% else %}
+          No patches or updates available for this server
+          {% endif %}
+          {% elif ansible_os_family == "RedHat" %}
+          {% if redhat_updates.results | length > 0 %}
+          {% for package in redhat_updates.results %}
+          {{ package.name }} - {{ package.version }}-{{ package.release }}
+          {% endfor %}
+          {% else %}
+          No patches or updates available for this server
+          {% endif %}
+          {% endif %}
 
-    - name: Generate patch list for Red Hat-based systems
-      template:
-        src: redhat_patches.j2
-        dest: "{{ remote_output_dir }}/{{ inventory_hostname }}_patches.txt"
-      when: ansible_os_family == "RedHat"
-
-    - name: Generate patch list for Debian-based systems
-      shell: apt list --upgradable
-      register: debian_patch_list
-      when: ansible_os_family == "Debian"
-
-    - name: Write Debian patch list to file
+    - name: Write patch list to file on output server
       copy:
-        content: "{{ hostname.stdout }}\n\n{{ debian_patch_list.stdout }}"
-        dest: "{{ remote_output_dir }}/{{ inventory_hostname }}_patches.txt"
-      when: ansible_os_family == "Debian"
-
-    - name: Append patch lists to output file on output server
-      shell: |
-        echo "{{ hostname.stdout }}" >> {{ output_file }}
-        cat {{ remote_output_dir }}/{{ inventory_hostname }}_patches.txt >> {{ output_file }}
-        echo "" >> {{ output_file }}
+        content: "{{ hostname.stdout }}\n\n{{ patch_content }}\n"
+        dest: "{{ output_file }}"
       delegate_to: "{{ output_server }}"
 
-    - name: Cleanup temporary files
-      file:
-        path: "{{ remote_output_dir }}/{{ inventory_hostname }}_patches.txt"
-        state: absent
+    - name: Apply updates (Debian)
+      apt:
+        upgrade: dist
+        autoremove: yes
+      when: ansible_os_family == "Debian"
 
-- name: Sort and deduplicate the output file
-  hosts: "{{ output_server }}"
-  become: yes
-  vars:
-    output_server: "10.1.34.26"
-    output_file: "/home/svc_aux/backup/patchinformation/patchlist.txt"
+    - name: Apply updates (RedHat)
+      dnf:
+        name: "*"
+        state: latest
+      when: ansible_os_family == "RedHat"
 
-  tasks:
-    - name: Sort and deduplicate the output file
-      shell: |
-        sort -u {{ output_file }} > {{ output_file }}.tmp
-        mv {{ output_file }}.tmp {{ output_file }}
+    - name: Check if reboot is required (Debian)
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required_file
+      when: ansible_os_family == "Debian"
+
+    - name: Check if reboot is required (RedHat)
+      command: needs-restarting -r
+      register: needs_restarting
+      failed_when: false
+      changed_when: false
+      when: ansible_os_family == "RedHat"
+
+    - name: Reboot the server if required
+      reboot:
+      when: >
+        (ansible_os_family == "Debian" and reboot_required_file.stat.exists) or
+        (ansible_os_family == "RedHat" and needs_restarting.rc == 1) and
+        reboot_ok|bool
+
+    - name: Append patching results to output file
+      lineinfile:
+        path: "{{ output_file }}"
+        line: "Patching completed for {{ hostname.stdout }} at {{ ansible_date_time.iso8601 }}"
+      delegate_to: "{{ output_server }}"
