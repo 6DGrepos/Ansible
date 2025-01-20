@@ -1,54 +1,33 @@
 ---
 - name: Check for available updates on Debian and RedHat systems
   hosts: all
-  become: true
+  become: yes
   tasks:
     - name: Gather facts about the system
-      ansible.builtin.setup:
+      ansible.builtin.gather_facts:
 
     - name: Debug OS family
-      ansible.builtin.debug:
-        msg: "System OS family: {{ ansible_facts.os_family }}"
+      debug:
+        msg: "System OS family: {{ ansible_facts['os_family'] }}"
 
     - name: Check for available updates on Debian-based systems
-      ansible.builtin.apt:
-        update_cache: yes
-        upgrade: dist
-      when: ansible_facts.os_family == "Debian"
+      shell: apt list --upgradable
+      when: ansible_facts['os_family'] == 'Debian'
       register: debian_updates
-
-    - name: Debug message for Debian-based system
-      ansible.builtin.debug:
-        msg: "Running on Debian-based system. Updates: {{ debian_updates }}"
+      ignore_errors: yes
 
     - name: Show Debian system update list
-      ansible.builtin.shell: |
-        apt list --upgradable
-      when: ansible_facts.os_family == "Debian"
-      register: debian_update_list
-
-    - name: Debug output for Debian system update list
-      ansible.builtin.debug:
-        msg: "Debian updates: {{ debian_update_list.stdout }}"
-      when: ansible_facts.os_family == "Debian"
+      debug:
+        msg: "{{ debian_updates.stdout }}"
+      when: ansible_facts['os_family'] == 'Debian'
 
     - name: Check for available updates on RedHat-based systems
-      ansible.builtin.yum:
-        list: updates
-      when: ansible_facts.os_family in ["RedHat", "CentOS", "Rocky", "AlmaLinux"]
+      shell: yum check-update
+      when: ansible_facts['os_family'] == 'RedHat'
       register: redhat_updates
-
-    - name: Debug message for RedHat-based system
-      ansible.builtin.debug:
-        msg: "Running on RedHat-based system. Updates: {{ redhat_updates }}"
+      ignore_errors: yes
 
     - name: Show RedHat system update list
-      ansible.builtin.shell: |
-        yum check-update
-      when: ansible_facts.os_family in ["RedHat", "CentOS", "Rocky", "AlmaLinux"]
-      register: redhat_update_list
-
-    - name: Debug output for RedHat system update list
-      ansible.builtin.debug:
-        msg: "RedHat updates: {{ redhat_update_list.stdout }}"
-      when: ansible_facts.os_family in ["RedHat", "CentOS", "Rocky", "AlmaLinux"]
+      debug:
+        msg: "{{ redhat_updates.stdout }}"
+      when: ansible_facts['os_family'] == 'RedHat'
