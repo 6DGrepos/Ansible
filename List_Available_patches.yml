@@ -1,48 +1,37 @@
 ---
 - name: Check and list available updates for all servers
   hosts: all
-  become: yes
-  gather_facts: yes
+  gather_facts: true
 
   tasks:
-    - name: Refresh the dnf cache before checking for updates (for Rocky Linux)
-      when: ansible_facts['os_family'] in ["RedHat", "Rocky"]
-      command: dnf makecache
-      register: dnf_cache
-      ignore_errors: yes
-
-    - name: Check for available updates on Rocky Linux
-      when: ansible_facts['os_family'] in ["RedHat", "Rocky"]
-      command: dnf list updates
+    - name: Check for updates on Rocky Linux
+      shell: "dnf list updates"
+      when: ansible_facts['os_family'] == 'RedHat'
       register: dnf_updates
-      ignore_errors: yes
+      ignore_errors: true
 
-    - name: Debug the output of dnf list updates (Rocky Linux)
-      when: dnf_updates is defined
-      debug:
-        var: dnf_updates.stdout
-
-    - name: Check for available updates on Debian-based systems
-      when: ansible_facts['os_family'] == "Debian"
-      command: apt list --upgradable
+    - name: Check for updates on Debian-based systems
+      shell: "apt list --upgradable"
+      when: ansible_facts['os_family'] == 'Debian'
       register: apt_updates
-      ignore_errors: yes
+      ignore_errors: true
 
-    - name: Debug the output of apt updates (Debian-based)
-      when: apt_updates is defined
-      debug:
-        var: apt_updates.stdout
-
-    - name: Display available updates for all systems
-      debug:
-        msg: |
-          {{ inventory_hostname }}:
-          {% if ansible_facts['os_family'] == 'Debian' %}
-            Apt updates: 
-            {{ apt_updates.stdout | default('No updates available or failed to fetch') }}
-          {% elif ansible_facts['os_family'] in ['RedHat', 'Rocky'] %}
-            DNF updates: 
-            {{ dnf_updates.stdout | default('No updates available or failed to fetch') }}
-          {% else %}
-            Unknown OS family
+    - name: Format output for each server
+      set_fact:
+        update_message: |
+          {{ ansible_hostname }}:
+          {% if dnf_updates.stdout %}
+            DNF updates:
+            {{ dnf_updates.stdout | indent(4) }}
           {% endif %}
+          {% if apt_updates.stdout %}
+            Apt updates:
+            {{ apt_updates.stdout | indent(4) }}
+          {% endif %}
+      
+    - name: Transfer output to the target server
+      copy:
+        content: "{{ update_message }}"
+        dest: "/tmp/available_updates_{{ ansible_hostname }}.txt"
+      when: inventory_hostname == "10.1.34.26"  # Target server for the output
+      delegate_to: localhost
