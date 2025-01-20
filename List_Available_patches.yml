@@ -16,8 +16,8 @@
       register: debian_updates
       ignore_errors: yes
 
-    - name: Check for available updates on RedHat-based systems
-      shell: yum check-update
+    - name: Check for available updates on RedHat-based systems (using dnf)
+      shell: dnf list updates
       when: ansible_facts['os_family'] == 'RedHat'
       register: redhat_updates
       ignore_errors: yes
