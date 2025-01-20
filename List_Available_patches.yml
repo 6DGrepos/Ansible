@@ -16,12 +16,12 @@
       register: apt_updates
       ignore_errors: true
 
-    - name: Ensure dnf updates exist
+    - name: Set dnf updates output variable if dnf updates exist
       set_fact:
         dnf_updates_stdout: "{{ dnf_updates.stdout if dnf_updates.stdout is defined else '' }}"
       when: ansible_facts['os_family'] == 'RedHat'
 
-    - name: Ensure apt updates exist
+    - name: Set apt updates output variable if apt updates exist
       set_fact:
         apt_updates_stdout: "{{ apt_updates.stdout if apt_updates.stdout is defined else '' }}"
       when: ansible_facts['os_family'] == 'Debian'
@@ -41,9 +41,7 @@
           {% endif %}
           -------------------------------
 
-    - name: Transfer output to the target server
+    - name: Append formatted output to a file on each server
       copy:
         content: "{{ update_message }}"
         dest: "/tmp/available_updates_{{ ansible_hostname }}.txt"
-      when: inventory_hostname == "10.1.34.26"  # Target server for the output
-      delegate_to: localhost
