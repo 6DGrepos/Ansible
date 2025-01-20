@@ -26,6 +26,12 @@
         dest: /home/svc_aux/backup/patchinformation/patchlist.txt
       delegate_to: 10.1.34.26
 
+    - name: Write hostname to file
+      lineinfile:
+        path: /home/svc_aux/backup/patchinformation/patchlist.txt
+        line: "Hostname: {{ inventory_hostname }}"
+      delegate_to: 10.1.34.26
+
     - name: Write RedHat patches to file
       lineinfile:
         path: /home/svc_aux/backup/patchinformation/patchlist.txt
