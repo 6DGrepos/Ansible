@@ -35,7 +35,7 @@
     - name: Check for available updates on RedHat-based systems
       ansible.builtin.yum:
         list: updates
-      when: ansible_facts.os_family == "RedHat"
+      when: ansible_facts.os_family in ["RedHat", "CentOS", "Rocky", "AlmaLinux"]
       register: redhat_updates
 
     - name: Debug message for RedHat-based system
@@ -45,10 +45,10 @@
     - name: Show RedHat system update list
       ansible.builtin.shell: |
         yum check-update
-      when: ansible_facts.os_family == "RedHat"
+      when: ansible_facts.os_family in ["RedHat", "CentOS", "Rocky", "AlmaLinux"]
       register: redhat_update_list
 
     - name: Debug output for RedHat system update list
       ansible.builtin.debug:
         msg: "RedHat updates: {{ redhat_update_list.stdout }}"
-      when: ansible_facts.os_family == "RedHat"
+      when: ansible_facts.os_family in ["RedHat", "CentOS", "Rocky", "AlmaLinux"]
