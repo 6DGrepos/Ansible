@@ -58,46 +58,54 @@
       when: insufficient_space is defined and insufficient_space | length > 0
 
     # Repository Check
+    - name: Update yum cache
+      ansible.builtin.yum:
+        update_cache: yes
+      register: yum_update_result
+      ignore_errors: yes
+
     - name: Check if repos are up-to-date and valid
-      ansible.builtin.command: dnf check-update
-      register: dnf_check_result
+      ansible.builtin.command: yum repolist
+      args:
+        warn: false
+      register: yum_check_result
       changed_when: false
-      failed_when: dnf_check_result.rc not in [0, 100]
+      failed_when: false
 
     - name: Set repository check status
       set_fact:
         system_status: "{{ system_status | combine({
           'repo_status': 'FAILED',
-          'repo_details': dnf_check_result.stderr if dnf_check_result.rc not in [0, 100] else 'No issues detected'
+          'repo_details': yum_update_result.msg if yum_update_result is failed else (yum_check_result.stderr if yum_check_result.rc != 0 else 'No issues detected')
         }) }}"
-      when: dnf_check_result.rc not in [0, 100]
+      when: yum_update_result is failed or yum_check_result.rc != 0
 
     # Patch servers only if both checks pass
     - name: Check for and apply updates
       block:
         - name: Check for available updates
-          ansible.builtin.dnf:
-            list: updates
+          ansible.builtin.yum:
+            update_cache: yes
           check_mode: yes
           register: update_check
 
         - name: Apply updates if available
-          ansible.builtin.dnf:
-            name: '*'
+          ansible.builtin.yum:
+            name: "*"
             state: latest
+            update_cache: yes
           when: update_check.changed
           register: patch_result
 
         - name: Get list of updated packages
-          ansible.builtin.shell: rpm -qa --last | head -n 50 | awk '{print $1}' | sort | uniq
+          ansible.builtin.shell: grep -E "^Updated:|^Installed:" /var/log/yum.log | tail -n 50 | awk '{print $2}' | sort | uniq
           register: updated_packages
           when: patch_result.changed
 
         - name: Check if reboot is required
-          ansible.builtin.command: needs-restarting -r
+          ansible.builtin.shell: "needs-restarting -r"
           register: reboot_required
-          changed_when: false
-          failed_when: false
+          failed_when: reboot_required.rc not in [0, 1]
 
         - name: Set patch status
           set_fact:
@@ -137,7 +145,7 @@
       wait_for:
         path: /home/svc_aux/backup/patchstatus/system_status.csv
         state: present
-        timeout: 600
+        timeout: 600  # Increase timeout if needed
 
     - name: Convert CSV to HTML
       command: python3 /home/svc_aux/backup/patchstatus/csv_to_htmpl.py
