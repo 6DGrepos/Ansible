@@ -1,48 +1,45 @@
 ---
-- name: Check for upgradable packages on servers
+- name: Check for available updates and save to CSV
   hosts: all
-  gather_facts: false
+  become: yes
+  vars:
+    csv_file: "/home/svc_aux/backup/patchinformation/patchlist.csv"
   tasks:
-    - name: Gather minimal facts
-      ansible.builtin.setup:
-        gather_subset:
-          - '!all'
-          - '!any'
-          - distribution
-      ignore_errors: true
+    - name: Ensure directory exists
+      ansible.builtin.file:
+        path: "/home/svc_aux/backup/patchinformation"
+        state: directory
+        mode: '0755'
 
-    - name: Check OS distribution
-      ansible.builtin.debug:
-        msg: "Detected OS: {{ ansible_distribution | default('Unknown') }}"
+    - name: Clear existing CSV file
+      ansible.builtin.file:
+        path: "{{ csv_file }}"
+        state: absent
 
-    - name: Check upgradable packages on Debian-based systems
-      ansible.builtin.apt:
-        update_cache: yes
-        cache_valid_time: 3600
-      check_mode: yes
-      register: apt_check
-      when: ansible_distribution is defined and ansible_distribution in ['Debian', 'Ubuntu']
-      ignore_errors: true
+    - name: Create new CSV file with header
+      ansible.builtin.copy:
+        content: "Hostname,Package,Version,Repository\n"
+        dest: "{{ csv_file }}"
+        mode: '0644'
 
-    - name: Display upgradable packages on Debian-based systems
-      ansible.builtin.debug:
-        msg: "{{ apt_check.changes }}"
-      when: apt_check is defined and apt_check.changed
+    - name: Check for updates on RedHat-based systems
+      ansible.builtin.shell: dnf list updates
+      register: dnf_updates
+      when: ansible_os_family == "RedHat"
+      changed_when: false
 
-    - name: Check upgradable packages on RedHat-based systems
-      ansible.builtin.dnf:
-        list: updates
-      check_mode: yes
-      register: dnf_check
-      when: ansible_distribution is defined and ansible_distribution in ['RedHat', 'CentOS', 'Fedora']
-      ignore_errors: true
+    - name: Check for updates on Debian-based systems
+      ansible.builtin.shell: apt list --upgradable
+      register: apt_updates
+      when: ansible_os_family == "Debian"
+      changed_when: false
 
-    - name: Display upgradable packages on RedHat-based systems
-      ansible.builtin.debug:
-        msg: "{{ dnf_check.results }}"
-      when: dnf_check is defined and dnf_check.results is defined
+    - name: Parse and append RedHat updates to CSV
+      ansible.builtin.shell: |
+        echo "{{ dnf_updates.stdout }}" | awk 'NR>1 {print "{{ inventory_hostname }}," $1 "," $2 "," $3}' >> {{ csv_file }}
+      when: ansible_os_family == "RedHat" and dnf_updates.stdout_lines|length > 1
 
-    - name: Display message for unknown OS
-      ansible.builtin.debug:
-        msg: "Could not determine or unsupported OS for {{ inventory_hostname }}"
-      when: ansible_distribution is not defined or ansible_distribution not in ['Debian', 'Ubuntu', 'RedHat', 'CentOS', 'Fedora']
+    - name: Parse and append Debian updates to CSV
+      ansible.builtin.shell: |
+        echo "{{ apt_updates.stdout }}" | awk -F'/' '/Inst/ {print "{{ inventory_hostname }}," $1 "," $2 "," $NF}' >> {{ csv_file }}
+      when: ansible_os_family == "Debian" and apt_updates.stdout_lines|length > 1
