@@ -3,6 +3,10 @@
   hosts: all
   become: yes
   tasks:
+    - name: Print OS family
+      debug:
+        msg: "OS Family: {{ ansible_os_family }}"
+
     - name: Check for updates on Debian-based systems
       apt:
         update_cache: yes
