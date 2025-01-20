@@ -1,58 +1,53 @@
 ---
-- name: Check and list available updates for all servers
+- name: List Available Patches
   hosts: all
-  gather_facts: true
-
+  gather_facts: false
   tasks:
-    - name: Check for updates on Rocky Linux
-      shell: "dnf list updates"
-      when: ansible_facts['os_family'] == 'RedHat'
-      register: dnf_updates
-      ignore_errors: true
+    - name: Get available updates for RedHat-based systems
+      shell: |
+        dnf updateinfo list available
+      register: dnf_updates_stdout
+      ignore_errors: yes
+      when: ansible_facts['distribution'] in ['RedHat', 'CentOS', 'Rocky', 'AlmaLinux']
 
-    - name: Check for updates on Debian-based systems
-      shell: "apt list --upgradable"
-      when: ansible_facts['os_family'] == 'Debian'
-      register: apt_updates
-      ignore_errors: true
+    - name: Check if there are updates for RedHat-based systems
+      debug:
+        msg: "Updates available: {{ dnf_updates_stdout.stdout }}"
+      when: dnf_updates_stdout is defined and dnf_updates_stdout.stdout != ""
 
-    - name: Set dnf updates output variable if dnf updates exist
-      set_fact:
-        dnf_updates_stdout: "{{ dnf_updates.stdout if dnf_updates.stdout is defined else '' }}"
-      when: ansible_facts['os_family'] == 'RedHat' and dnf_updates is defined
+    - name: Get available updates for Ubuntu-based systems
+      shell: |
+        apt list --upgradable
+      register: apt_updates_stdout
+      ignore_errors: yes
+      when: ansible_facts['distribution'] in ['Ubuntu', 'Debian']
 
-    - name: Set apt updates output variable if apt updates exist
-      set_fact:
-        apt_updates_stdout: "{{ apt_updates.stdout if apt_updates.stdout is defined else '' }}"
-      when: ansible_facts['os_family'] == 'Debian' and apt_updates is defined
-
-    - name: Ensure both dnf and apt updates outputs are defined
-      set_fact:
-        dnf_updates_stdout: "{{ dnf_updates_stdout | default('') }}"
-        apt_updates_stdout: "{{ apt_updates_stdout | default('') }}"
+    - name: Check if there are updates for Ubuntu-based systems
+      debug:
+        msg: "Updates available: {{ apt_updates_stdout.stdout }}"
+      when: apt_updates_stdout is defined and apt_updates_stdout.stdout != ""
 
     - name: Format output for each server with headers and footers
       set_fact:
-        update_message: |
-          -------------------------------
-          {{ ansible_hostname }}:
-          {% if dnf_updates_stdout %}
-            DNF updates:
-            {{ dnf_updates_stdout | indent(4) }}
+        patch_output: |
+          Server: {{ ansible_hostname }}
+          Updates:
+          {% if ansible_facts['distribution'] in ['RedHat', 'CentOS', 'Rocky', 'AlmaLinux'] %}
+            {{ dnf_updates_stdout.stdout if dnf_updates_stdout is defined else 'No updates found' }}
+          {% elif ansible_facts['distribution'] in ['Ubuntu', 'Debian'] %}
+            {{ apt_updates_stdout.stdout if apt_updates_stdout is defined else 'No updates found' }}
+          {% else %}
+            Unsupported OS
           {% endif %}
-          {% if apt_updates_stdout %}
-            Apt updates:
-            {{ apt_updates_stdout | indent(4) }}
-          {% endif %}
-          -------------------------------
 
-    - name: Debug: Check the generated update_message
-      debug:
-        msg: "{{ update_message }}"
-
-    - name: Transfer output to the file on 10.1.34.26 (regardless of inventory)
+    - name: Save the patch list to file on the target server
       copy:
-        content: "{{ update_message }}"
-        dest: "/home/svc_aux/backup/patchinformation/patchlist.txt"
-        append: yes
+        content: "{{ patch_output }}"
+        dest: "/tmp/available_updates_{{ ansible_hostname }}.txt"
+
+    - name: Transfer patch information to the central backup server
+      copy:
+        src: "/tmp/available_updates_{{ ansible_hostname }}.txt"
+        dest: "/home/svc_aux/backup/patchinformation/patchlist_{{ ansible_hostname }}.txt"
       delegate_to: "10.1.34.26"
+      when: ansible_hostname != "10.1.34.26"
