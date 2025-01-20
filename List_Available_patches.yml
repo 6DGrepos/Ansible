@@ -2,50 +2,47 @@
 - name: Check and list available updates for all servers
   hosts: all
   become: yes
-  tasks:
+  gather_facts: yes
 
+  tasks:
     - name: Refresh the dnf cache before checking for updates (for Rocky Linux)
-      command: dnf makecache
       when: ansible_facts['os_family'] == "RedHat"
-      register: dnf_cache_refresh
+      command: dnf makecache
+      register: dnf_cache
       ignore_errors: yes
 
     - name: Check for available updates on Rocky Linux
-      command: dnf list updates
       when: ansible_facts['os_family'] == "RedHat"
-      register: redhat_updates
+      command: dnf list updates
+      register: dnf_updates
       ignore_errors: yes
 
     - name: Debug the output of dnf list updates (Rocky Linux)
+      when: dnf_updates is defined
       debug:
-        msg: "{{ redhat_updates.stdout }}"
-      when: ansible_facts['os_family'] == "RedHat" and redhat_updates.stdout is defined
+        var: dnf_updates.stdout
 
     - name: Check for available updates on Debian-based systems
-      apt:
-        update_cache: yes
-        cache_valid_time: 3600
       when: ansible_facts['os_family'] == "Debian"
-      register: debian_updates
-      failed_when: false
+      command: apt list --upgradable
+      register: apt_updates
       ignore_errors: yes
 
     - name: Debug the output of apt updates (Debian-based)
+      when: apt_updates is defined
       debug:
-        msg: "{{ debian_updates.stdout }}"
-      when: ansible_facts['os_family'] == "Debian" and debian_updates.stdout is defined
+        var: apt_updates.stdout
 
     - name: Display available updates for all systems
       debug:
         msg: |
-          -----------------------------
-          hostname : {{ ansible_facts['hostname'] }}
-          {% if redhat_updates.stdout %}
-            Available updates on Rocky Linux:
-            {{ redhat_updates.stdout }}
+          {{ inventory_hostname }}:
+          {% if ansible_facts['os_family'] == 'Debian' %}
+            Apt updates: 
+            {{ apt_updates.stdout | default('No updates available or failed to fetch') }}
+          {% elif ansible_facts['os_family'] == 'RedHat' %}
+            DNF updates: 
+            {{ dnf_updates.stdout | default('No updates available or failed to fetch') }}
+          {% else %}
+            Unknown OS family
           {% endif %}
-          {% if debian_updates.stdout %}
-            Available updates on Debian-based systems:
-            {{ debian_updates.stdout }}
-          {% endif %}
-          -----------------------------
