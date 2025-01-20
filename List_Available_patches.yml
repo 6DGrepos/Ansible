@@ -44,20 +44,22 @@
       delegate_to: "{{ remote_server }}"
 
     - name: Append patch information to the remote CSV file
-      ansible.builtin.lineinfile:
+      ansible.builtin.blockinfile:
         path: "{{ remote_path }}"
-        line: |
+        block: |
+          {{ inventory_hostname }} ({{ ansible_facts.hostname }})
           {% if distro.stdout in ["rhel", "centos", "rocky", "almalinux"] %}
           {% for line in redhat_updates.stdout_lines %}
-          {{ inventory_hostname }},{{ line | regex_replace(' +', ',') }}
+          {{ line | regex_replace('^(\S+)\s+(\S+)\s+(\S+).*$', '\\1,\\2,\\3') }}
           {% endfor %}
           {% elif distro.stdout in ["debian", "ubuntu"] %}
           {% for line in debian_updates.stdout_lines if not line.startswith('Listing...') %}
-          {{ inventory_hostname }},{{ line | regex_replace(' +', ',') }}
+          {{ line | regex_replace('^(\S+)/\S+\s+\S+\s+(\S+)\s+(\S+).*$', '\\1,\\2,\\3') }}
           {% endfor %}
           {% else %}
-          {{ inventory_hostname }},Unsupported Linux Distribution ({{ distro.stdout }})
+          Unsupported Linux Distribution ({{ distro.stdout }})
           {% endif %}
+        marker: "# {mark} ANSIBLE MANAGED BLOCK FOR {{ inventory_hostname }}"
         create: yes
         state: present
       delegate_to: "{{ remote_server }}"
