@@ -46,7 +46,13 @@
           {% endif %}
           -------------------------------
 
-    - name: Append formatted output to a file on each server
+    - name: Debug: Check the generated update_message
+      debug:
+        msg: "{{ update_message }}"
+
+    - name: Transfer output to the file on 10.1.34.26 (regardless of inventory)
       copy:
         content: "{{ update_message }}"
-        dest: "/tmp/available_updates_{{ ansible_hostname }}.txt"
+        dest: "/home/svc_aux/backup/patchinformation/patchlist.txt"
+        append: yes
+      delegate_to: "10.1.34.26"
