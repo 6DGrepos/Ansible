@@ -1,4 +1,3 @@
----
 - name: List available patches and save to file
   hosts: all
   become: yes
@@ -8,12 +7,12 @@
       register: hostname
 
     - name: Check for available patches on RedHat-based systems
-      shell: yum check-update || true
+      shell: dnf list updates || true
       register: redhat_patches
       when: ansible_os_family == "RedHat"
 
     - name: Check for available patches on Debian-based systems
-      shell: apt list --upgradable || true
+      shell: apt list --upgradable 2>/dev/null || true
       register: debian_patches
       when: ansible_os_family == "Debian"
 
@@ -46,10 +45,10 @@
           when: debian_patches.stdout is defined and debian_patches.stdout != ""
           delegate_to: 10.1.34.26
 
-        - name: Write 'No patches available' if no patches found
+        - name: Write 'No patches available to upgrade' if no patches found
           lineinfile:
             path: /home/svc_aux/backup/patchinformation/patchlist.txt
-            line: "No patches available to patch"
+            line: "No patches available to upgrade"
           when: (redhat_patches.stdout is not defined or redhat_patches.stdout == "") and 
                 (debian_patches.stdout is not defined or debian_patches.stdout == "")
           delegate_to: 10.1.34.26
