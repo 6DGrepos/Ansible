@@ -1,56 +1,71 @@
 ---
-- name: List Available Patches
+- name: Check for available updates on Debian and RedHat systems
   hosts: all
-  gather_facts: true
+  become: yes
   tasks:
-    - name: Get available updates for RedHat-based systems
-      shell: |
-        dnf updateinfo list available
-      register: dnf_updates_stdout
-      failed_when: false
-      ignore_errors: true
-      when: ansible_facts['distribution'] in ['RedHat', 'CentOS', 'Rocky', 'AlmaLinux']
+    - name: Gather facts about the system
+      ansible.builtin.gather_facts:
 
-    - name: Check if there are updates for RedHat-based systems
-      debug:
-        msg: "Updates available: {{ dnf_updates_stdout.stdout }}"
-      when: dnf_updates_stdout.stdout is defined and dnf_updates_stdout.stdout != ""
+    - name: Get the hostname of the system
+      shell: uname -n
+      register: system_hostname
 
-    - name: Get available updates for Ubuntu-based systems
-      shell: |
-        apt list --upgradable
-      register: apt_updates_stdout
-      failed_when: false
-      ignore_errors: true
-      when: ansible_facts['distribution'] in ['Ubuntu', 'Debian']
+    - name: Check for available updates on Debian-based systems
+      shell: apt list --upgradable
+      when: ansible_facts['os_family'] == 'Debian'
+      register: debian_updates
+      ignore_errors: yes
 
-    - name: Check if there are updates for Ubuntu-based systems
-      debug:
-        msg: "Updates available: {{ apt_updates_stdout.stdout }}"
-      when: apt_updates_stdout.stdout is defined and apt_updates_stdout.stdout != ""
+    - name: Check for available updates on RedHat-based systems (using dnf)
+      shell: dnf list updates
+      when: ansible_facts['os_family'] == 'RedHat'
+      register: redhat_updates
+      ignore_errors: yes
 
-    - name: Format output for each server with headers and footers
-      set_fact:
-        patch_output: |
-          Server: {{ ansible_hostname }}
-          Updates:
-          {% if ansible_facts['distribution'] in ['RedHat', 'CentOS', 'Rocky', 'AlmaLinux'] %}
-            {{ dnf_updates_stdout.stdout if dnf_updates_stdout is defined else 'No updates found' }}
-          {% elif ansible_facts['distribution'] in ['Ubuntu', 'Debian'] %}
-            {{ apt_updates_stdout.stdout if apt_updates_stdout is defined else 'No updates found' }}
-          {% else %}
-            Unsupported OS
-          {% endif %}
+    - name: Ensure patchlist file exists and clear old contents on 10.1.34.26 (Debian)
+      ansible.builtin.file:
+        path: /home/svc_aux/backup/patchinformation/patchlist.txt
+        state: touch
+      delegate_to: 10.1.34.26
 
-    - name: Save the patch list to file on the target server
-      copy:
-        content: "{{ patch_output }}"
-        dest: "/tmp/available_updates_{{ ansible_hostname }}.txt"
+    - name: Clear old contents of patchlist file on 10.1.34.26 (Debian)
+      ansible.builtin.copy:
+        dest: /home/svc_aux/backup/patchinformation/patchlist.txt
+        content: ""
+      when: ansible_facts['os_family'] == 'Debian'
+      delegate_to: 10.1.34.26
 
-    - name: Transfer patch information to the central backup server
-      copy:
-        src: "/tmp/available_updates_{{ ansible_hostname }}.txt"
-        dest: "/home/svc_aux/backup/patchinformation/patchlist_{{ ansible_hostname }}.txt"
-        remote_src: yes  # Ensures that the file is copied from the remote server to another location
-      delegate_to: "10.1.34.26"
-      when: ansible_hostname != "10.1.34.26"
+    - name: Format and write updates to patchlist file on 10.1.34.26 (Debian)
+      ansible.builtin.lineinfile:
+        path: /home/svc_aux/backup/patchinformation/patchlist.txt
+        line: |
+          -----------------------------------
+          hostname: {{ system_hostname.stdout }}
+          {{ debian_updates.stdout | replace('\n', '\n') }}
+          -----------------------------
+      when: ansible_facts['os_family'] == 'Debian'
+      delegate_to: 10.1.34.26
+
+    - name: Ensure patchlist file exists and clear old contents on 10.1.34.26 (RedHat)
+      ansible.builtin.file:
+        path: /home/svc_aux/backup/patchinformation/patchlist.txt
+        state: touch
+      delegate_to: 10.1.34.26
+
+    - name: Clear old contents of patchlist file on 10.1.34.26 (RedHat)
+      ansible.builtin.copy:
+        dest: /home/svc_aux/backup/patchinformation/patchlist.txt
+        content: ""
+      when: ansible_facts['os_family'] == 'RedHat'
+      delegate_to: 10.1.34.26
+
+    - name: Format and write updates to patchlist file on 10.1.34.26 (RedHat)
+      ansible.builtin.lineinfile:
+        path: /home/svc_aux/backup/patchinformation/patchlist.txt
+        line: |
+          -----------------------------------
+          hostname: {{ system_hostname.stdout }}
+          {{ redhat_updates.stdout | replace('\n', '\n') }}
+          -----------------------------
+      when: ansible_facts['os_family'] == 'RedHat'
+      delegate_to: 10.1.34.26
