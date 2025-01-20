@@ -6,62 +6,53 @@
     - name: Gather facts about the system
       ansible.builtin.gather_facts:
 
+    - name: Debug - Print OS information
+      debug:
+        msg: "OS Family: {{ ansible_os_family }}, Distribution: {{ ansible_distribution }}, Version: {{ ansible_distribution_version }}"
+
     - name: Get the hostname of the system
       shell: uname -n
       register: system_hostname
 
     - name: Check for available updates on Debian-based systems
       shell: apt list --upgradable
-      when: ansible_facts['os_family'] == 'Debian'
+      when: ansible_os_family == 'Debian'
       register: debian_updates
       ignore_errors: yes
 
-    - name: Check for available updates on RedHat-based systems (using dnf)
-      shell: dnf list updates
-      when: 
-        - ansible_facts['os_family'] == 'RedHat'
-        - ansible_distribution != 'Rocky'
+    - name: Check for available updates on RedHat-based systems (including Rocky)
+      shell: yum check-update
+      when: ansible_os_family == 'RedHat'
       register: redhat_updates
       ignore_errors: yes
+      failed_when: redhat_updates.rc not in [0, 100]
 
-    - name: Check for available updates on Rocky Linux (using yum)
-      shell: yum check-update
-      when: ansible_distribution == 'Rocky'
-      register: rocky_updates
-      ignore_errors: yes
-      failed_when: rocky_updates.rc not in [0, 100]
+    - name: Debug - Print update check results
+      debug:
+        msg: "Update check results: {{ redhat_updates }}"
+      when: ansible_os_family == 'RedHat'
 
-    - name: Ensure patchlist file exists and clear old contents on 10.1.34.26
+    - name: Ensure patchlist file exists on 10.1.34.26
       ansible.builtin.file:
         path: /home/svc_aux/backup/patchinformation/patchlist.txt
         state: touch
       delegate_to: 10.1.34.26
 
-    - name: Clear old contents of patchlist file on 10.1.34.26
-      ansible.builtin.copy:
-        dest: /home/svc_aux/backup/patchinformation/patchlist.txt
-        content: ""
-      delegate_to: 10.1.34.26
-
-    - name: Format and write updates to patchlist file on 10.1.34.26 (Debian)
+    - name: Format and write updates to patchlist file on 10.1.34.26
       ansible.builtin.lineinfile:
         path: /home/svc_aux/backup/patchinformation/patchlist.txt
         line: |
           -----------------------------------
           hostname: {{ system_hostname.stdout }}
-          {{ debian_updates.stdout | replace('\n', '\n') }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          {% if ansible_os_family == 'Debian' %}
+          {{ debian_updates.stdout | default('No updates available') }}
+          {% elif ansible_os_family == 'RedHat' %}
+          {{ redhat_updates.stdout | default('No updates available') }}
+          {% endif %}
           -----------------------------
-      when: ansible_facts['os_family'] == 'Debian'
       delegate_to: 10.1.34.26
 
-    - name: Format and write updates to patchlist file on 10.1.34.26 (RedHat)
-      ansible.builtin.lineinfile:
-        path: /home/svc_aux/backup/patchinformation/patchlist.txt
-        line: |
-          -----------------------------------
-          hostname: {{ system_hostname.stdout }}
-          {{ redhat_updates.stdout | default('') | replace('\n', '\n') }}
-          {{ rocky_updates.stdout | default('') | replace('\n', '\n') }}
-          -----------------------------
-      when: ansible_facts['os_family'] == 'RedHat'
-      delegate_to: 10.1.34.26
+    - name: Debug - Confirm write operation
+      debug:
+        msg: "Attempted to write update information for {{ ansible_distribution }} to patchlist file"
