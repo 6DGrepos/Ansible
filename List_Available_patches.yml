@@ -79,6 +79,7 @@
   hosts: "{{ output_server }}"
   become: yes
   vars:
+    output_server: "10.1.34.26"
     output_file: "/home/svc_aux/backup/patchinformation/patchlist.txt"
 
   tasks:
