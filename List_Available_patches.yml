@@ -13,11 +13,16 @@
       when: ansible_facts.os_family == "Debian"
       register: debian_updates
 
+    - name: Show Debian system update list
+      ansible.builtin.shell: |
+        apt list --upgradable
+      when: ansible_facts.os_family == "Debian"
+      register: debian_update_list
+
     - name: Display available updates on Debian-based systems
       ansible.builtin.debug:
-        msg: "Debian updates: {{ debian_updates.upgrades | map(attribute='package') | join(', ') }}"
+        msg: "Debian updates: {{ debian_update_list.stdout }}"
       when: ansible_facts.os_family == "Debian"
-      when: debian_updates.upgrades is defined
 
     - name: Check for available updates on RedHat-based systems
       ansible.builtin.yum:
@@ -25,8 +30,13 @@
       when: ansible_facts.os_family == "RedHat"
       register: redhat_updates
 
+    - name: Show RedHat system update list
+      ansible.builtin.shell: |
+        yum check-update
+      when: ansible_facts.os_family == "RedHat"
+      register: redhat_update_list
+
     - name: Display available updates on RedHat-based systems
       ansible.builtin.debug:
-        msg: "RedHat updates: {{ redhat_updates.updates | map(attribute='name') | join(', ') }}"
+        msg: "RedHat updates: {{ redhat_update_list.stdout }}"
       when: ansible_facts.os_family == "RedHat"
-      when: redhat_updates.updates is defined
