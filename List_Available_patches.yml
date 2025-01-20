@@ -15,8 +15,9 @@
 
     - name: Display available updates on Debian-based systems
       ansible.builtin.debug:
-        msg: "Debian updates: {{ debian_updates.results | map(attribute='name') | join(', ') }}"
+        msg: "Debian updates: {{ debian_updates.upgrades | map(attribute='package') | join(', ') }}"
       when: ansible_facts.os_family == "Debian"
+      when: debian_updates.upgrades is defined
 
     - name: Check for available updates on RedHat-based systems
       ansible.builtin.yum:
@@ -26,5 +27,6 @@
 
     - name: Display available updates on RedHat-based systems
       ansible.builtin.debug:
-        msg: "RedHat updates: {{ redhat_updates.results | map(attribute='name') | join(', ') }}"
+        msg: "RedHat updates: {{ redhat_updates.updates | map(attribute='name') | join(', ') }}"
       when: ansible_facts.os_family == "RedHat"
+      when: redhat_updates.updates is defined
