@@ -1,31 +1,33 @@
 ---
 - name: List Available Patches
   hosts: all
-  gather_facts: false
+  gather_facts: true
   tasks:
     - name: Get available updates for RedHat-based systems
       shell: |
         dnf updateinfo list available
       register: dnf_updates_stdout
-      ignore_errors: yes
+      failed_when: false
+      ignore_errors: true
       when: ansible_facts['distribution'] in ['RedHat', 'CentOS', 'Rocky', 'AlmaLinux']
 
     - name: Check if there are updates for RedHat-based systems
       debug:
         msg: "Updates available: {{ dnf_updates_stdout.stdout }}"
-      when: dnf_updates_stdout is defined and dnf_updates_stdout.stdout != ""
+      when: dnf_updates_stdout.stdout is defined and dnf_updates_stdout.stdout != ""
 
     - name: Get available updates for Ubuntu-based systems
       shell: |
         apt list --upgradable
       register: apt_updates_stdout
-      ignore_errors: yes
+      failed_when: false
+      ignore_errors: true
       when: ansible_facts['distribution'] in ['Ubuntu', 'Debian']
 
     - name: Check if there are updates for Ubuntu-based systems
       debug:
         msg: "Updates available: {{ apt_updates_stdout.stdout }}"
-      when: apt_updates_stdout is defined and apt_updates_stdout.stdout != ""
+      when: apt_updates_stdout.stdout is defined and apt_updates_stdout.stdout != ""
 
     - name: Format output for each server with headers and footers
       set_fact:
