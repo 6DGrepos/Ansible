@@ -33,48 +33,42 @@
       register: hostname
       changed_when: false
 
+    - name: Update apt cache (Debian)
+      apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
     - name: List available updates (Debian)
-      shell: apt list --upgradable 2>/dev/null | grep -v "Listing..."
+      shell: apt list --upgradable 2>/dev/null | grep -v "Listing..." || echo "No updates available"
       register: debian_updates
+      changed_when: false
       when: ansible_os_family == "Debian"
 
     - name: List available updates (RedHat)
-      shell: dnf check-update || true
+      shell: dnf check-update -q || echo "No updates available"
       register: redhat_updates
+      changed_when: false
       when: ansible_os_family == "RedHat"
 
-    - name: Generate patch list content for Debian-based systems
+    - name: Generate patch list content
       set_fact:
-        patch_content_debian: >
-          {% if debian_updates.stdout_lines | length > 0 %}
+        patch_content: >
+          {% if ansible_os_family == "Debian" %}
+          {% if debian_updates.stdout_lines | length > 0 and debian_updates.stdout != "No updates available" %}
           {{ debian_updates.stdout }}
           {% else %}
-          No patches or updates available for this server.
+          No updates available
           {% endif %}
-      when: ansible_os_family == "Debian"
-
-    - name: Generate patch list content for Red Hat-based systems
-      set_fact:
-        patch_content_redhat: >
-          {% if redhat_updates.stdout_lines | length > 0 %}
+          {% elif ansible_os_family == "RedHat" %}
+          {% if redhat_updates.stdout_lines | length > 0 and redhat_updates.stdout != "No updates available" %}
           {{ redhat_updates.stdout }}
           {% else %}
-          No patches or updates available for this server.
+          No updates available
           {% endif %}
-      when: ansible_os_family == "RedHat"
+          {% endif %}
 
-    - name: Write patch list to file on output server (Debian)
+    - name: Write patch list to file on output server
       copy:
-        content: "{{ hostname.stdout }}\n\n{{ patch_content_debian }}\n"
+        content: "{{ hostname.stdout }}\n\n{{ patch_content }}\n"
         dest: "{{ output_file }}"
-        remote_src: true
       delegate_to: "{{ output_server }}"
-      when: ansible_os_family == "Debian"
-
-    - name: Write patch list to file on output server (RedHat)
-      copy:
-        content: "{{ hostname.stdout }}\n\n{{ patch_content_redhat }}\n"
-        dest: "{{ output_file }}"
-        remote_src: true
-      delegate_to: "{{ output_server }}"
-      when: ansible_os_family == "RedHat"
