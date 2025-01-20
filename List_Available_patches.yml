@@ -33,7 +33,7 @@
       failed_when: false
       changed_when: false
 
-    - name: Save patch information locally
+    - name: Save patch information locally on managed host
       ansible.builtin.copy:
         content: |
           Hostname,Package,Details
@@ -53,7 +53,7 @@
 - name: Consolidate and transfer patch information
   hosts: localhost
   tasks:
-    - name: Gather patch files from all hosts
+    - name: Fetch patch files from all hosts
       ansible.builtin.fetch:
         src: /tmp/patchlist_{{ inventory_hostname }}.csv
         dest: /tmp/patchlist_data/
