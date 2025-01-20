@@ -1,5 +1,5 @@
 ---
-- name: Linux Patching Playbook
+- name: List available patches for Linux systems
   hosts: all
   become: yes
   vars:
@@ -7,47 +7,19 @@
     output_file: "/home/svc_aux/backup/patchinformation/patchlist.txt"
 
   tasks:
-    - name: Ensure output directory exists on output server
-      file:
-        path: "/home/svc_aux/backup/patchinformation"
-        state: directory
-      delegate_to: "{{ output_server }}"
-      run_once: true
-
-    - name: Clear previous content of the output file
-      file:
-        path: "{{ output_file }}"
-        state: absent
-      delegate_to: "{{ output_server }}"
-      run_once: true
-
-    - name: Create empty output file
-      file:
-        path: "{{ output_file }}"
-        state: touch
-      delegate_to: "{{ output_server }}"
-      run_once: true
-
     - name: Get hostname
       command: uname -n
       register: hostname
       changed_when: false
 
-    - name: Update apt cache (Debian)
-      apt:
-        update_cache: yes
-      when: ansible_os_family == "Debian"
-
-    - name: List available updates (Debian)
+    - name: List available updates (Debian/Ubuntu)
       shell: apt list --upgradable 2>/dev/null | grep -v "Listing..." || echo "No updates available"
       register: debian_updates
-      changed_when: false
       when: ansible_os_family == "Debian"
 
-    - name: List available updates (RedHat)
+    - name: List available updates (RedHat/Rocky)
       shell: dnf check-update -q || echo "No updates available"
       register: redhat_updates
-      changed_when: false
       when: ansible_os_family == "RedHat"
 
     - name: Generate patch list content
