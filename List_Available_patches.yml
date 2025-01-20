@@ -3,6 +3,10 @@
   hosts: all
   become: yes
   tasks:
+    - name: Get the hostname
+      command: uname -n
+      register: hostname
+
     - name: Check for available patches on RedHat-based systems
       shell: yum check-update || true
       register: redhat_patches
@@ -29,7 +33,7 @@
     - name: Write hostname to file
       lineinfile:
         path: /home/svc_aux/backup/patchinformation/patchlist.txt
-        line: "Hostname: {{ inventory_hostname }}"
+        line: "Hostname: {{ hostname.stdout }}"
       delegate_to: 10.1.34.26
 
     - name: Write RedHat patches to file
