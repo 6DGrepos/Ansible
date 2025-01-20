@@ -24,35 +24,32 @@
         mode: '0644'
       delegate_to: 10.1.34.26
 
-    - name: Clear the contents of the patch list file
-      copy:
-        content: ''
-        dest: /home/svc_aux/backup/patchinformation/patchlist.txt
-      delegate_to: 10.1.34.26
+    - name: Append hostname and patches to file
+      block:
+        - name: Write hostname to file
+          lineinfile:
+            path: /home/svc_aux/backup/patchinformation/patchlist.txt
+            line: "Hostname: {{ hostname.stdout }}"
+          delegate_to: 10.1.34.26
 
-    - name: Write hostname to file
-      lineinfile:
-        path: /home/svc_aux/backup/patchinformation/patchlist.txt
-        line: "Hostname: {{ hostname.stdout }}"
-      delegate_to: 10.1.34.26
+        - name: Write RedHat patches to file
+          lineinfile:
+            path: /home/svc_aux/backup/patchinformation/patchlist.txt
+            line: "{{ redhat_patches.stdout_lines | join('\n') }}"
+          when: redhat_patches.stdout is defined and redhat_patches.stdout != ""
+          delegate_to: 10.1.34.26
 
-    - name: Write RedHat patches to file
-      lineinfile:
-        path: /home/svc_aux/backup/patchinformation/patchlist.txt
-        line: "{{ redhat_patches.stdout }}"
-      when: redhat_patches.stdout is defined and redhat_patches.stdout != ""
-      delegate_to: 10.1.34.26
+        - name: Write Debian patches to file
+          lineinfile:
+            path: /home/svc_aux/backup/patchinformation/patchlist.txt
+            line: "{{ debian_patches.stdout_lines | join('\n') }}"
+          when: debian_patches.stdout is defined and debian_patches.stdout != ""
+          delegate_to: 10.1.34.26
 
-    - name: Write Debian patches to file
-      lineinfile:
-        path: /home/svc_aux/backup/patchinformation/patchlist.txt
-        line: "{{ debian_patches.stdout }}"
-      when: debian_patches.stdout is defined and debian_patches.stdout != ""
-      delegate_to: 10.1.34.26
-
-    - name: Write 'No patches available' if no patches found
-      lineinfile:
-        path: /home/svc_aux/backup/patchinformation/patchlist.txt
-        line: "No patches available to patch"
-      when: (redhat_patches.stdout is not defined or redhat_patches.stdout == "") and (debian_patches.stdout is not defined or debian_patches.stdout == "")
-      delegate_to: 10.1.34.26
+        - name: Write 'No patches available' if no patches found
+          lineinfile:
+            path: /home/svc_aux/backup/patchinformation/patchlist.txt
+            line: "No patches available to patch"
+          when: (redhat_patches.stdout is not defined or redhat_patches.stdout == "") and 
+                (debian_patches.stdout is not defined or debian_patches.stdout == "")
+          delegate_to: 10.1.34.26
