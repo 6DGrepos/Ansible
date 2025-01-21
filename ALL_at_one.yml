@@ -198,25 +198,4 @@
       delegate_to: 10.1.34.26
 
     - name: Collect running services before reboot
-      ansible.builtin.shell: systemctl list-units --type=service --state=running | awk 'NR>1 && $1 !~ /^(LOAD|ACTIVE|SUB)$/ {print $1}' | awk 'NF > 0'
-      register: running_services_before_reboot
-
-    - name: Save running services before reboot to a file on remote server
-      ansible.builtin.copy:
-        content: "{{ running_services_before_reboot.stdout }}"
-        dest: "/home/svc_aux/backup/files/{{ fqdn_output.stdout }}/running_services_before_reboot.txt"
-      delegate_to: 10.1.34.26
-
-- name: Convert CSV to HTML on remote server
-  hosts: 10.1.34.26
-  remote_user: svc_aux
-  become: yes
-  become_method: sudo
-  become_user: root
-  gather_facts: yes
-  tasks:
-    - name: Wait for CSV file to be created
-      wait_for:
-        path: /home/svc_aux/backup/All_Servers_information/All_server_information.csv
-        state: present
-        timeout
+      ansible.builtin.shell: systemctl list-units --type=service --state=running | awk 'NR>1 && $1 !~ /^(LOAD|
