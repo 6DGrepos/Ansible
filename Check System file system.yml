@@ -19,7 +19,7 @@
           {% set critical_filesystems = [] %}
           {% for line in disk_usage_all.stdout_lines %}
             {% set mount, usage = line.split() %}
-            {% set usage_percent = usage[:-1] | int %}
+            {% set usage_percent = usage[:-1 | int %}
             {% if usage_percent > 80 and not (mount.startswith('/var/lib/docker') or mount.startswith('/snap')) %}
               {{ critical_filesystems.append(mount) }}
             {% endif %}
@@ -41,6 +41,7 @@
         module: copy
         content: "{{ disk_report }}\n"
         dest: /tmp/disk_usage_{{ inventory_hostname }}.txt
+      when: inventory_hostname != '10.1.34.26'
 
     - name: Consolidate all reports into a single file on the AWX controller
       run_once: true
