@@ -92,42 +92,53 @@
         - apt_update_result is failed or apt_check_result.rc != 0
 
     # Patch servers
-    - name: Check for and apply updates
-      block:
-        - name: Check for available updates
-          ansible.builtin.apt:
-            update_cache: yes
-          check_mode: yes
-          register: update_check
+    - name: Check for available updates
+      ansible.builtin.apt:
+        update_cache: yes
+      check_mode: yes
+      register: update_check
+      when: inventory_hostname != '10.1.34.26'
 
-        - name: Apply updates if available
-          ansible.builtin.apt:
-            upgrade: dist
-            update_cache: yes
-          when: update_check.changed
-          register: patch_result
+    - name: Debug update check
+      debug:
+        var: update_check
+      when: inventory_hostname != '10.1.34.26'
 
-        - name: Get list of updated packages
-          ansible.builtin.shell: grep -E "^Unpacking|^Setting up" /var/log/dpkg.log | tail -n 50 | awk '{print $4}' | sort | uniq
-          register: updated_packages
-          when: patch_result.changed
-
-        - name: Check if reboot is required
-          ansible.builtin.stat:
-            path: /var/run/reboot-required
-          register: reboot_required
-
-        - name: Set patch status
-          set_fact:
-            system_status: "{{ system_status | combine({
-              'patch_status': 'PATCHING SUCCESSFUL' if patch_result.changed else 'NO PATCHES AVAILABLE TO PATCH',
-              'updated_packages': updated_packages.stdout_lines | default([]) | join(', '),
-              'reboot_required': 'YES' if reboot_required.stat.exists else 'NO'
-            }) }}"
-      when:
+    - name: Apply updates if available
+      ansible.builtin.apt:
+        upgrade: dist
+        update_cache: yes
+      register: patch_result
+      when: 
         - inventory_hostname != '10.1.34.26'
-        - system_status.filesystem_status | default('FAILED') == 'SUCCESS'
-        - system_status.repo_status | default('FAILED') == 'SUCCESS'
+        - update_check.changed
+
+    - name: Debug patch result
+      debug:
+        var: patch_result
+      when: inventory_hostname != '10.1.34.26'
+
+    - name: Get list of updated packages
+      ansible.builtin.shell: grep -E "^Unpacking|^Setting up" /var/log/dpkg.log | tail -n 50 | awk '{print $4}' | sort | uniq
+      register: updated_packages
+      when: 
+        - inventory_hostname != '10.1.34.26'
+        - patch_result.changed
+
+    - name: Check if reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+      when: inventory_hostname != '10.1.34.26'
+
+    - name: Set patch status
+      set_fact:
+        system_status: "{{ system_status | combine({
+          'patch_status': 'PATCHING SUCCESSFUL' if patch_result.changed else 'NO PATCHES AVAILABLE TO PATCH',
+          'updated_packages': updated_packages.stdout_lines | default([]) | join(', '),
+          'reboot_required': 'YES' if reboot_required.stat.exists else 'NO'
+        }) }}"
+      when: inventory_hostname != '10.1.34.26'
 
     # Update Status File
     - name: Update status file
