@@ -75,4 +75,4 @@
     - name: Convert CSV to HTML
       command: python3 /home/svc_aux/backup/files/new_convert.py
       args:
-        chdir: /home/svc_aux/backup/files
+        chdir: /home/svc_aux/backup/files/
