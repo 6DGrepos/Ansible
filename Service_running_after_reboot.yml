@@ -78,7 +78,7 @@
         chdir: /home/svc_aux/backup/files/
 
 - name: Update central CSV file
-  hosts: 10.1.34.26
+  hosts: all
   become: yes
   become_method: sudo
   become_user: root
@@ -100,12 +100,12 @@
         mode: '0664'
         owner: svc_aux
         group: svc_aux
+      when: inventory_hostname == groups['all'][0]
 
     - name: Append gathered information to CSV file
       ansible.builtin.lineinfile:
         path: "/home/svc_aux/backup/All_Servers_information/All_server_information.csv"
-        line: "{{ hostvars[item]['csv_data'] }}"
-      loop: "{{ groups['all'] }}"
+        line: "{{ hostvars[inventory_hostname]['csv_data'] }}"
       when: 
-        - hostvars[item]['csv_data'] is defined
-        - item != '10.1.34.26'
+        - inventory_hostname != '10.1.34.26'
+        - hostvars[inventory_hostname]['csv_data'] is defined
