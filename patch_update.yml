@@ -84,16 +84,19 @@
     - name: Check for and apply updates
       block:
         - name: Check for available updates
-          ansible.builtin.apt:
-            update_cache: yes
-          check_mode: yes
+          ansible.builtin.shell: apt-get upgrade --dry-run | grep -Po '^[0-9]+ (?=upgraded)'
           register: update_check
+          changed_when: false
+
+        - name: Set fact for available updates
+          set_fact:
+            updates_available: "{{ update_check.stdout | int > 0 }}"
 
         - name: Apply updates if available
           ansible.builtin.apt:
             upgrade: dist
             update_cache: yes
-          when: update_check.changed
+          when: updates_available
           register: patch_result
 
         - name: Get list of updated packages
@@ -119,6 +122,14 @@
         - system_status.filesystem_status == "SUCCESS"
         - system_status.repo_status is defined
         - system_status.repo_status == "SUCCESS"
+      rescue:
+        - name: Set patch status on failure
+          set_fact:
+            system_status: "{{ system_status | combine({
+              'patch_status': 'PATCHING FAILED',
+              'updated_packages': 'Error occurred during patching',
+              'reboot_required': 'UNKNOWN'
+            }) }}"
 
     # Update Status File
     - name: Update status file
