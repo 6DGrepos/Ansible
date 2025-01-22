@@ -91,7 +91,7 @@
         - inventory_hostname != '10.1.34.26'
         - apt_update_result is failed or apt_check_result.rc != 0
 
-    # Patch servers only if both checks pass
+    # Patch servers
     - name: Check for and apply updates
       block:
         - name: Check for available updates
@@ -126,11 +126,8 @@
             }) }}"
       when:
         - inventory_hostname != '10.1.34.26'
-        - system_status is defined
-        - system_status.filesystem_status is defined
-        - system_status.filesystem_status == "SUCCESS"
-        - system_status.repo_status is defined
-        - system_status.repo_status == "SUCCESS"
+        - system_status.filesystem_status | default('FAILED') == 'SUCCESS'
+        - system_status.repo_status | default('FAILED') == 'SUCCESS'
 
     # Update Status File
     - name: Update status file
