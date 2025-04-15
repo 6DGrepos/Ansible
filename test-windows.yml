@@ -1,6 +1,6 @@
 ---
 - name: Test connection to Windows servers
-  hosts: windows
+  hosts: all
   gather_facts: no
 
   tasks:
