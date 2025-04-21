@@ -11,18 +11,22 @@
         reboot: yes
       register: update_result
 
+    - name: Debug update result
+      debug:
+        var: update_result
+
     - name: Reboot system if required
       win_reboot:
         reboot_timeout: 600
         test_command: whoami
       when: update_result.reboot_required
 
-    - name: Display update status
+    - name: Display update status (Updates Installed)
       debug:
-        msg: "Updates completed successfully."
-      when: update_result.updates_installed | length > 0
+        msg: "Updates installed: {{ update_result.installed_updates | length }}"
+      when: update_result.installed_updates | length > 0
 
     - name: No updates needed
       debug:
         msg: "No updates were installed."
-      when: update_result.updates_installed | length == 0
+      when: update_result.installed_updates | length == 0
