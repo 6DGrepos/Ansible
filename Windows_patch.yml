@@ -23,10 +23,10 @@
 
     - name: Display update status (Updates Installed)
       debug:
-        msg: "Updates installed: {{ update_result.installed_updates | length }}"
-      when: update_result.installed_updates | length > 0
+        msg: "Updates installed: {{ update_result.installed_update_count }}"
+      when: update_result.installed_update_count > 0
 
     - name: No updates needed
       debug:
         msg: "No updates were installed."
-      when: update_result.installed_updates | length == 0
+      when: update_result.installed_update_count == 0
