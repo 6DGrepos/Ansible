@@ -3,10 +3,10 @@
   gather_facts: no
   tasks:
     - name: Stop explorer.exe
-      ansible.windows.win_shell: |
+      win_shell: |
         Stop-Process -Name explorer -Force
-      ignore_errors: yes  # Explorer is not always running
+      ignore_errors: yes
 
     - name: Start explorer.exe
-      ansible.windows.win_shell: |
+      win_shell: |
         Start-Process explorer.exe
