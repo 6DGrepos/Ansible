@@ -1,0 +1,7 @@
+---
+- hosts: all
+  tasks:
+    - name: Restart Windows Explorer service
+      ansible.windows.win_service:
+        name: Explorer
+        state: restarted
