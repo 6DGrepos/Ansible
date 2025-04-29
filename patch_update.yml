@@ -1,4 +1,3 @@
----
 - name: Check Filesystem, Repository Status, Patch Servers, and Check Reboot
   hosts: all
   become: yes
@@ -89,9 +88,17 @@
           register: update_check
           changed_when: false
 
+        - name: Debug update_check output
+          ansible.builtin.debug:
+            var: update_check.stdout
+
         - name: Set fact for available updates
           set_fact:
-            updates_available: "{{ update_check.stdout | int > 0 }}"
+            updates_available: "{{ 'upgraded' in update_check.stdout }}"
+
+        - name: Debug updates_available
+          ansible.builtin.debug:
+            var: updates_available
 
         - name: Apply updates if available
           ansible.builtin.apt:
