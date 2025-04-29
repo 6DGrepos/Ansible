@@ -85,7 +85,7 @@
     - name: Check for and apply updates
       block:
         - name: Check for available updates
-          ansible.builtin.shell: apt-get upgrade --dry-run | grep -Po '^[0-9]+ (?=upgraded)'
+          ansible.builtin.shell: apt-get upgrade --dry-run
           register: update_check
           changed_when: false
 
