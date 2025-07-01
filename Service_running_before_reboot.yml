@@ -1,86 +1,63 @@
 ---
 - name: Save running services before reboot
   hosts: all
-  gather_facts: no
-  vars:
-    backup_base_dir: "/home/svc_aux/backup/files"
+  gather_facts: yes
   tasks:
-    - name: Skip tasks on 10.1.34.26
-      meta: end_play
-      when: inventory_hostname == '10.1.34.26'
-
-    - name: Gather facts
-      ansible.builtin.setup:
-        gather_subset: all
-
-    - name: Get fully qualified domain name (FQDN)
+    - name: Get the FQDN using hostname -f
       ansible.builtin.command: hostname -f
       register: fqdn_output
+      when: inventory_hostname != '10.1.34.26'
 
-    - name: Debug FQDN
-      ansible.builtin.debug:
-        msg: "FQDN for host {{ inventory_hostname }} is {{ fqdn_output.stdout }}"
+    - name: Debug FQDN value (for troubleshooting)
+      debug:
+        var: fqdn_output.stdout
+      when: inventory_hostname != '10.1.34.26'
 
-    - name: Create directory on 10.1.34.26 for this host's backup
+    - name: Create directory using FQDN on backup server
       ansible.builtin.file:
-        path: "{{ backup_base_dir }}/{{ fqdn_output.stdout }}"
+        path: "/home/svc_aux/backup/files/{{ fqdn_output.stdout }}"
         state: directory
         mode: '0755'
       delegate_to: 10.1.34.26
-      run_once: false
+      become: yes
+      become_user: root
+      when: inventory_hostname != '10.1.34.26'
 
-    - name: Remove previous running services file on 10.1.34.26
+    - name: Clear previous data before reboot
       ansible.builtin.file:
-        path: "{{ backup_base_dir }}/{{ fqdn_output.stdout }}/running_services_before_reboot.txt"
+        path: "/home/svc_aux/backup/files/{{ fqdn_output.stdout }}/running_services_before_reboot.txt"
         state: absent
       delegate_to: 10.1.34.26
-      run_once: false
+      become: yes
+      become_user: root
+      when: inventory_hostname != '10.1.34.26'
 
     - name: Collect running services before reboot
-      ansible.builtin.shell: |
-        systemctl list-units --type=service --state=running --no-pager --no-legend | awk '{print $1}'
+      ansible.builtin.shell: >
+        systemctl list-units --type=service --state=running |
+        awk 'NR>1 && $1 !~ /^(LOAD|ACTIVE|SUB)$/ {print $1}' |
+        awk 'NF > 0'
       register: running_services_before_reboot
-      changed_when: false
+      when: inventory_hostname != '10.1.34.26'
 
-    - name: Debug running services output
-      ansible.builtin.debug:
-        var: running_services_before_reboot.stdout_lines
-
-    - name: Save running services to file on 10.1.34.26
+    - name: Save running services before reboot to a file on backup server
       ansible.builtin.copy:
         content: "{{ running_services_before_reboot.stdout }}"
-        dest: "{{ backup_base_dir }}/{{ fqdn_output.stdout }}/running_services_before_reboot.txt"
+        dest: "/home/svc_aux/backup/files/{{ fqdn_output.stdout }}/running_services_before_reboot.txt"
         mode: '0644'
       delegate_to: 10.1.34.26
-      run_once: false
+      become: yes
+      become_user: root
+      when: inventory_hostname != '10.1.34.26'
 
-- name: Convert CSV to HTML on 10.1.34.26
+- name: Convert CSV to HTML on remote server
   hosts: 10.1.34.26
   remote_user: svc_aux
   become: yes
-  become_method: sudo
   become_user: root
   gather_facts: yes
-  vars:
-    backup_base_dir: "/home/svc_aux/backup/files"
   tasks:
-    - name: Check if new_convert.py exists
-      ansible.builtin.stat:
-        path: "{{ backup_base_dir }}/new_convert.py"
-      register: convert_script
-
-    - name: Fail if conversion script is missing
-      ansible.builtin.fail:
-        msg: "Conversion script new_convert.py not found in {{ backup_base_dir }}"
-      when: not convert_script.stat.exists
-
-    - name: Run CSV to HTML conversion script
-      ansible.builtin.command:
-        cmd: python3 new_convert.py
-        chdir: "{{ backup_base_dir }}"
-      register: convert_result
-      changed_when: false
-
-    - name: Show conversion script output
-      ansible.builtin.debug:
-        var: convert_result.stdout
+    - name: Convert CSV to HTML
+      command: python3 /home/svc_aux/backup/files/new_convert.py
+      args:
+        chdir: /home/svc_aux/backup/files
