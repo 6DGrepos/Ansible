@@ -160,11 +160,11 @@
         flat: yes
 
     - name: Copy output file to remote server
-      ansible.builtin.shell: |
-        scp /tmp/{{ inventory_hostname }}_{{ ansible_date_time.date }}.out svc_aux@10.1.34.26:/home/svc_aux/backup/serverbackups/
-      delegate_to: localhost
-      vars:
-        ansible_ssh_pass: just44now
+      ansible.builtin.copy:
+        src: /tmp/{{ inventory_hostname }}_{{ ansible_date_time.date }}.out
+        dest: /home/svc_aux/backup/serverbackups/
+        mode: '0644'
+      delegate_to: 10.1.34.26
 
 - name: Convert CSV to HTML on remote server
   hosts: 10.1.34.26
@@ -176,7 +176,5 @@
   tasks:
     - name: Convert CSV to HTML
       command: python3 /home/svc_aux/backup/serverbackups/new_convert_backups_to_html.py
-      become: yes
-      become_user: root
       args:
         chdir: /home/svc_aux/backup/serverbackups/
