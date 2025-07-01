@@ -1,6 +1,6 @@
 - name: Collect system information and copy to backup server
   hosts: all
-  become: yes
+  become: no
   tasks:
     - name: Create output file
       ansible.builtin.file:
