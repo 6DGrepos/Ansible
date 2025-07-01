@@ -1,14 +1,16 @@
+---
 - name: Execute commands and store output
   hosts: all
+  gather_facts: yes
   tasks:
-    - name: Create output file
+    - name: Create output file on remote host
       ansible.builtin.file:
         path: /tmp/{{ inventory_hostname }}_{{ ansible_date_time.date }}.out
         state: touch
       become: yes
 
     - name: Execute commands and append output to file
-      shell: |
+      ansible.builtin.shell: |
         {
           echo "==== Process Information ====";
           for cmd in \
@@ -147,27 +149,30 @@
       ignore_errors: yes
       become: yes
 
-    - name: Ensure destination directory exists on remote server
+    - name: Ensure destination directory exists on backup server
       ansible.builtin.file:
         path: /home/svc_aux/backup/serverbackups
         state: directory
       delegate_to: 10.1.34.26
+      become: no
 
     - name: Fetch output file to controller
       ansible.builtin.fetch:
         src: /tmp/{{ inventory_hostname }}_{{ ansible_date_time.date }}.out
         dest: /tmp/
         flat: yes
+      become: no
 
-    - name: Copy output file to remote server
+    - name: Copy output file to backup server
       ansible.builtin.copy:
         src: /tmp/{{ inventory_hostname }}_{{ ansible_date_time.date }}.out
         dest: /home/svc_aux/backup/serverbackups/
         mode: '0644'
       delegate_to: 10.1.34.26
-      become: no
+      become: no  # <--- FIX: No privilege escalation needed
 
-- name: Convert CSV to HTML on remote server
+# Second play: Convert CSV to HTML on the backup server
+- name: Convert CSV to HTML on backup server
   hosts: 10.1.34.26
   remote_user: svc_aux
   become: yes
@@ -176,6 +181,6 @@
   gather_facts: yes
   tasks:
     - name: Convert CSV to HTML
-      command: python3 /home/svc_aux/backup/serverbackups/new_convert_backups_to_html.py
+      ansible.builtin.command: python3 /home/svc_aux/backup/serverbackups/new_convert_backups_to_html.py
       args:
         chdir: /home/svc_aux/backup/serverbackups/
