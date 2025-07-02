@@ -1,3 +1,4 @@
+
 - name: Setup status server
   hosts: localhost
   connection: local
@@ -91,9 +92,9 @@
       set_fact:
         system_status: "{{ system_status | combine({
           'repo_status': 'FAILED',
-          'repo_details': apt_update_result.msg if apt_update_result is failed else (apt_check_result.stderr if (apt_check_result.rc | default(0)) != 0 else 'No issues detected')
+          'repo_details': apt_update_result.msg if apt_update_result is failed else (apt_check_result.stderr if apt_check_result.rc != 0 else 'No issues detected')
         }) }}"
-      when: apt_update_result is failed or (apt_check_result.rc | default(0)) != 0
+      when: apt_update_result is failed or apt_check_result.rc != 0
 
     # Patch servers only if both checks pass
     - name: Check for and apply updates
@@ -129,7 +130,10 @@
               'reboot_required': 'YES' if reboot_required.stat.exists else 'NO'
             }) }}"
       when:
+        - system_status is defined
+        - system_status.filesystem_status is defined
         - system_status.filesystem_status == "SUCCESS"
+        - system_status.repo_status is defined
         - system_status.repo_status == "SUCCESS"
 
     # Update Status File
@@ -152,7 +156,7 @@
       wait_for:
         path: /home/svc_aux/backup/patchstatus/system_status.csv
         state: present
-        timeout: 600
+        timeout: 600  # Increase timeout if needed
 
     - name: Convert CSV to HTML
       command: python3 /home/svc_aux/backup/patchstatus/csv_to_htmpl.py
