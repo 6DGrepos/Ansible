@@ -4,7 +4,7 @@
   hosts: all
   become: yes
   vars:
-    min_space_mb: 200
+    min_space_mb: 100
     status_file: "/home/svc_aux/backup/patchstatus/system_status.csv"
   tasks:
     - name: Remove existing status file (run once on 10.1.34.26)
