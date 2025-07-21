@@ -133,6 +133,7 @@
       ansible.builtin.debug:
         var: system_status
 	
+	
 - name: Convert CSV to HTML on remote server
   hosts: 10.1.34.26
   remote_user: svc_aux
