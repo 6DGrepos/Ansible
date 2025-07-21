@@ -5,7 +5,6 @@
   vars:
     min_space_mb: 500
     status_file: "/home/svc_aux/backup/patchstatus/system_status.csv"
-
   tasks:
     - name: Remove existing status file
       ansible.builtin.file:
@@ -19,10 +18,11 @@
         path: "{{ status_file }}"
         line: "hostname,filesystem_status,filesystem_details,repo_status,repo_details,patch_status,updated_packages,reboot_required"
         create: yes
+        mode: '0644'
       delegate_to: 10.1.34.26
       run_once: true
 
-    - name: Initialize status
+    - name: Initialize status fact
       set_fact:
         system_status:
           hostname: "{{ inventory_hostname }}"
@@ -34,23 +34,26 @@
           updated_packages: "N/A"
           reboot_required: "NO"
 
-    # Filesystem Check
+    # Filesystem check
     - name: Check available space in filesystems
-      ansible.builtin.shell: df -m {{ item }} | awk 'NR==2 {print $4}'
+      ansible.builtin.shell: "df -Pm {{ item }} | awk 'NR==2 {print $4}'"
+      args:
+        executable: /bin/bash
       register: available_space
       loop:
         - /
         - /boot
         - /var
-      ignore_errors: yes
+      changed_when: false
+      ignore_errors: true
 
-    - name: Verify sufficient space
-      ansible.builtin.set_fact:
+    - name: Find filesystems with insufficient space
+      set_fact:
         insufficient_space: "{{ insufficient_space | default([]) + [item.item] }}"
-      loop: "{{ available_space.results }}"
-      when: item.stdout|int < min_space_mb
+      loop: "{{ available_space.results | default([]) }}"
+      when: (item.stdout | int(0)) < min_space_mb
 
-    - name: Set filesystem check status
+    - name: Set filesystem check status if needed
       set_fact:
         system_status: "{{ system_status | combine({
           'filesystem_status': 'FAILED',
@@ -63,29 +66,27 @@
       ansible.builtin.apt:
         update_cache: yes
       register: apt_update_result
-      ignore_errors: yes
+      ignore_errors: true
 
-    - name: Check if repos are up-to-date and valid
+    - name: Run apt-get update command for detailed info
       ansible.builtin.command: apt-get update
-      args:
-        warn: false
       register: apt_check_result
       changed_when: false
       failed_when: false
 
-    - name: Set repository check status
+    - name: Set repository check status if needed
       set_fact:
         system_status: "{{ system_status | combine({
           'repo_status': 'FAILED',
-          'repo_details': apt_update_result.msg if apt_update_result is failed else (apt_check_result.stderr if apt_check_result.rc != 0 else 'No issues detected')
+          'repo_details': (apt_update_result.msg if (apt_update_result is failed) else (apt_check_result.stderr if apt_check_result.rc != 0 else 'No issues detected'))
         }) }}"
-      when: apt_update_result is failed or apt_check_result.rc != 0
+      when: (apt_update_result is failed) or (apt_check_result.rc | default(0) != 0)
 
-    # Patch servers only if both checks pass
-    - name: Check for and apply updates
-      block:
-        - name: Check for available updates
+    # Patch only if FS & Repo OK
+    - block:
+        - name: Check for available package updates (simulated run)
           ansible.builtin.apt:
+            upgrade: dist
             update_cache: yes
           check_mode: yes
           register: update_check
@@ -97,58 +98,53 @@
           when: update_check.changed
           register: patch_result
 
-        - name: Get list of updated packages
-          ansible.builtin.shell: grep -E "^Unpacking|^Setting up" /var/log/dpkg.log | tail -n 50 | awk '{print $4}' | sort | uniq
+        - name: Extract list of newly updated packages (last 100 events)
+          ansible.builtin.shell: "grep -E '^(Unpacking|Setting up)' /var/log/dpkg.log | awk '{print $4}' | sort | uniq | tail -n 50"
+          when: patch_result is defined and patch_result.changed | default(false)
           register: updated_packages
-          when: patch_result.changed
 
         - name: Check if reboot is required
           ansible.builtin.stat:
             path: /var/run/reboot-required
           register: reboot_required
 
-        - name: Set patch status
+        - name: Set patch status and summary
           set_fact:
             system_status: "{{ system_status | combine({
-              'patch_status': 'PATCHING SUCCESSFUL' if patch_result.changed else 'NO PATCHES AVAILABLE TO PATCH',
-              'updated_packages': updated_packages.stdout_lines | default([]) | join(', '),
-              'reboot_required': 'YES' if reboot_required.stat.exists else 'NO'
+              'patch_status': (patch_result.changed | default(false)) | ternary('PATCHING SUCCESSFUL', 'NO PATCHES AVAILABLE TO PATCH'),
+              'updated_packages': (updated_packages.stdout_lines | default([]) | join(', ')),
+              'reboot_required': (reboot_required.stat.exists | default(false)) | ternary('YES', 'NO')
             }) }}"
-      when:
-        - system_status is defined
-        - system_status.filesystem_status is defined
-        - system_status.filesystem_status == "SUCCESS"
-        - system_status.repo_status is defined
-        - system_status.repo_status == "SUCCESS"
+      when: >
+        system_status is defined and
+        system_status.filesystem_status == "SUCCESS" and
+        system_status.repo_status == "SUCCESS"
 
-    # Update Status File
-    - name: Update status file
+    # Update Centralized Status File
+    - name: Append system status to CSV file
       ansible.builtin.lineinfile:
         path: "{{ status_file }}"
         line: "{{ system_status.hostname }},{{ system_status.filesystem_status }},{{ system_status.filesystem_details | replace(',', ';') }},{{ system_status.repo_status }},{{ system_status.repo_details | replace(',', ';') }},{{ system_status.patch_status }},{{ system_status.updated_packages }},{{ system_status.reboot_required }}"
         insertafter: EOF
       delegate_to: 10.1.34.26
 
-    - name: Display system status
+    - name: Display system status debug
       ansible.builtin.debug:
         var: system_status
-	
-	
-- name: Convert CSV to HTML on remote server
+
+- name: Convert CSV to HTML on central server
   hosts: 10.1.34.26
   remote_user: svc_aux
   become: yes
-  become_method: sudo
-  become_user: root
-  gather_facts: yes
+  gather_facts: false
   tasks:
     - name: Wait for CSV file to be created
-      wait_for:
+      ansible.builtin.wait_for:
         path: /home/svc_aux/backup/patchstatus/system_status.csv
         state: present
-        timeout: 600  # Increase timeout if needed
+        timeout: 600
 
     - name: Convert CSV to HTML
-      command: python3 /home/svc_aux/backup/patchstatus/csv_to_htmpl.py
+      ansible.builtin.command: python3 csv_to_htmpl.py
       args:
         chdir: /home/svc_aux/backup/patchstatus/
