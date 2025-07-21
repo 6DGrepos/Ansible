@@ -1,4 +1,5 @@
 ---
+# Patch and status collection on all hosts except 10.1.34.26
 - name: Check Filesystem, Repository Status, Patch Servers, and Check Reboot
   hosts: all
   become: yes
@@ -6,23 +7,37 @@
     min_space_mb: 500
     status_file: "/home/svc_aux/backup/patchstatus/system_status.csv"
   tasks:
-    - name: Remove existing status file
+    - name: Remove existing status file (run once on 10.1.34.26)
       ansible.builtin.file:
         path: "{{ status_file }}"
         state: absent
-      delegate_to: 10.1.34.26
+      when: inventory_hostname == '10.1.34.26'
       run_once: true
 
-    - name: Create new status file with header
+    - name: Create new status file with header (run once on 10.1.34.26)
       ansible.builtin.lineinfile:
         path: "{{ status_file }}"
         line: "hostname,filesystem_status,filesystem_details,repo_status,repo_details,patch_status,updated_packages,reboot_required"
         create: yes
         mode: '0644'
-      delegate_to: 10.1.34.26
+      when: inventory_hostname == '10.1.34.26'
       run_once: true
 
+    # Main check/patch tasks run on all except 10.1.34.26
     - name: Initialize status fact
+      set_fact:
+        system_status:
+          hostname: "{{ inventory_hostname }}"
+          filesystem_status: "SKIPPED"
+          filesystem_details: "Not checked on central server"
+          repo_status: "SKIPPED"
+          repo_details: "Not checked on central server"
+          patch_status: "SKIPPED"
+          updated_packages: "N/A"
+          reboot_required: "NO"
+      when: inventory_hostname == '10.1.34.26'
+
+    - name: Initialize status fact (all other hosts)
       set_fact:
         system_status:
           hostname: "{{ inventory_hostname }}"
@@ -33,8 +48,9 @@
           patch_status: "NOT PATCHED"
           updated_packages: "N/A"
           reboot_required: "NO"
+      when: inventory_hostname != '10.1.34.26'
 
-    # Filesystem check
+    # Filesystem check (skip for 10.1.34.26)
     - name: Check available space in filesystems
       ansible.builtin.shell: "df -Pm {{ item }} | awk 'NR==2 {print $4}'"
       args:
@@ -46,12 +62,15 @@
         - /var
       changed_when: false
       ignore_errors: true
+      when: inventory_hostname != '10.1.34.26'
 
     - name: Find filesystems with insufficient space
       set_fact:
         insufficient_space: "{{ insufficient_space | default([]) + [item.item] }}"
       loop: "{{ available_space.results | default([]) }}"
-      when: (item.stdout | int(0)) < min_space_mb
+      when:
+        - inventory_hostname != '10.1.34.26'
+        - (item.stdout | int(0)) < min_space_mb
 
     - name: Set filesystem check status if needed
       set_fact:
@@ -59,20 +78,25 @@
           'filesystem_status': 'FAILED',
           'filesystem_details': 'Insufficient space in ' + (insufficient_space | join(', '))
         }) }}"
-      when: insufficient_space is defined and insufficient_space | length > 0
+      when:
+        - inventory_hostname != '10.1.34.26'
+        - insufficient_space is defined
+        - insufficient_space | length > 0
 
-    # Repository Check
+    # Repository Check (skip for 10.1.34.26)
     - name: Update apt cache
       ansible.builtin.apt:
         update_cache: yes
       register: apt_update_result
       ignore_errors: true
+      when: inventory_hostname != '10.1.34.26'
 
     - name: Run apt-get update command for detailed info
       ansible.builtin.command: apt-get update
       register: apt_check_result
       changed_when: false
       failed_when: false
+      when: inventory_hostname != '10.1.34.26'
 
     - name: Set repository check status if needed
       set_fact:
@@ -80,9 +104,11 @@
           'repo_status': 'FAILED',
           'repo_details': (apt_update_result.msg if (apt_update_result is failed) else (apt_check_result.stderr if apt_check_result.rc != 0 else 'No issues detected'))
         }) }}"
-      when: (apt_update_result is failed) or (apt_check_result.rc | default(0) != 0)
+      when:
+        - inventory_hostname != '10.1.34.26'
+        - (apt_update_result is failed) or (apt_check_result.rc | default(0) != 0)
 
-    # Patch only if FS & Repo OK
+    # Patch only if FS & Repo OK, and skip for 10.1.34.26
     - block:
         - name: Check for available package updates (simulated run)
           ansible.builtin.apt:
@@ -98,7 +124,7 @@
           when: update_check.changed
           register: patch_result
 
-        - name: Extract list of newly updated packages (last 100 events)
+        - name: Extract list of newly updated packages (last 50)
           ansible.builtin.shell: "grep -E '^(Unpacking|Setting up)' /var/log/dpkg.log | awk '{print $4}' | sort | uniq | tail -n 50"
           when: patch_result is defined and patch_result.changed | default(false)
           register: updated_packages
@@ -115,12 +141,13 @@
               'updated_packages': (updated_packages.stdout_lines | default([]) | join(', ')),
               'reboot_required': (reboot_required.stat.exists | default(false)) | ternary('YES', 'NO')
             }) }}"
-      when: >
-        system_status is defined and
-        system_status.filesystem_status == "SUCCESS" and
-        system_status.repo_status == "SUCCESS"
+      when:
+        - inventory_hostname != '10.1.34.26'
+        - system_status is defined
+        - system_status.filesystem_status == "SUCCESS"
+        - system_status.repo_status == "SUCCESS"
 
-    # Update Centralized Status File
+    # Update centralized status file (delegated to 10.1.34.26)
     - name: Append system status to CSV file
       ansible.builtin.lineinfile:
         path: "{{ status_file }}"
@@ -132,6 +159,7 @@
       ansible.builtin.debug:
         var: system_status
 
+# CSV to HTML conversion ONLY on central server
 - name: Convert CSV to HTML on central server
   hosts: 10.1.34.26
   remote_user: svc_aux
