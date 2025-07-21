@@ -1,3 +1,4 @@
+---
 - name: Check Filesystem, Repository Status, Patch Servers, and Check Reboot
   hosts: all
   become: yes
@@ -47,7 +48,7 @@
       ansible.builtin.set_fact:
         insufficient_space: "{{ insufficient_space | default([]) + [item.item] }}"
       loop: "{{ available_space.results }}"
-      when: item.stdout | int < min_space_mb
+      when: item.stdout|int < min_space_mb
 
     - name: Set filesystem check status
       set_fact:
@@ -131,7 +132,8 @@
     - name: Display system status
       ansible.builtin.debug:
         var: system_status
-
+	
+	
 - name: Convert CSV to HTML on remote server
   hosts: 10.1.34.26
   remote_user: svc_aux
