@@ -1,5 +1,5 @@
 ---
-- name: Clean up old output and convert CSV to HTML on backup server
+- name: Clean up old output on backup server
   hosts: 10.1.34.26
   remote_user: svc_aux
   become: yes
@@ -19,11 +19,6 @@
         state: absent
       loop: "{{ old_backup_dirs.files }}"
       when: old_backup_dirs.matched > 0
-
-    - name: Convert CSV to HTML
-      ansible.builtin.command: python3 /home/svc_aux/backup/files/new_convert.py
-      args:
-        chdir: /home/svc_aux/backup/files
 
 - name: Save running services before reboot
   hosts: all
@@ -75,3 +70,15 @@
       become: yes
       become_user: root
       when: inventory_hostname != '10.1.34.26'
+
+- name: Convert CSV to HTML on backup server
+  hosts: 10.1.34.26
+  remote_user: svc_aux
+  become: yes
+  become_user: root
+  gather_facts: no
+  tasks:
+    - name: Convert CSV to HTML
+      ansible.builtin.command: python3 /home/svc_aux/backup/files/new_convert.py
+      args:
+        chdir: /home/svc_aux/backup/files
