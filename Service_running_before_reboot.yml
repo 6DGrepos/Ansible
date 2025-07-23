@@ -9,7 +9,7 @@
       when: inventory_hostname != '10.1.34.26'
 
     - name: Debug FQDN value (for troubleshooting)
-      debug:
+      ansible.builtin.debug:
         var: fqdn_output.stdout
       when: inventory_hostname != '10.1.34.26'
 
@@ -50,14 +50,28 @@
       become_user: root
       when: inventory_hostname != '10.1.34.26'
 
-- name: Convert CSV to HTML on remote server
+- name: Clean up old output and convert CSV to HTML on backup server
   hosts: 10.1.34.26
   remote_user: svc_aux
   become: yes
   become_user: root
   gather_facts: yes
   tasks:
+    - name: Find subdirectories under /home/svc_aux/backup/files
+      ansible.builtin.find:
+        paths: /home/svc_aux/backup/files
+        file_type: directory
+        depth: 1
+      register: old_backup_dirs
+
+    - name: Remove old output directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ old_backup_dirs.files }}"
+      when: old_backup_dirs.matched > 0
+
     - name: Convert CSV to HTML
-      command: python3 /home/svc_aux/backup/files/new_convert.py
+      ansible.builtin.command: python3 /home/svc_aux/backup/files/new_convert.py
       args:
         chdir: /home/svc_aux/backup/files
