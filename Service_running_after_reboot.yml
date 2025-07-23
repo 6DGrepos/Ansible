@@ -8,7 +8,7 @@
   gather_facts: no
   tasks:
     - name: Get the hostname with domain using hostname -f
-      ansible.builtin.command: uname -n
+      ansible.builtin.command: hostname -f
       register: fqdn_output
       when: inventory_hostname != '10.1.34.26'
 
